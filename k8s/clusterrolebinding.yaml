@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ingress-selfservice
+subjects:
+  - kind: ServiceAccount
+    name: ingress-selfservice
+    namespace: ingress-selfservice
+roleRef:
+  kind: ClusterRole
+  name: ingress-selfservice
+  apiGroup: rbac.authorization.k8s.io

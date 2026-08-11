@@ -1,0 +1,37 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ingress-selfservice-sweeper
+  namespace: ingress-selfservice
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ingress-selfservice
+          restartPolicy: OnFailure
+          containers:
+            - name: sweeper
+              image: registry.example.com/ingress-selfservice:latest
+              # ; not && — pruneExpired must still run even if processCommands
+              # fails outright (e.g. a transient DB error), so expiry doesn't
+              # silently stop working for a cycle.
+              command: ["sh", "-c", "php app/console.php kubernetes processCommands; php app/console.php kubernetes pruneExpired"]
+              env:
+                - name: SERVER_CONFIG
+                  value: /etc/ingress-selfservice/kubeconfig
+              envFrom:
+                - configMapRef:
+                    name: ingress-selfservice-config
+                - secretRef:
+                    name: ingress-selfservice-secrets
+              volumeMounts:
+                - name: kubeconfig
+                  mountPath: /etc/ingress-selfservice
+                  readOnly: true
+          volumes:
+            - name: kubeconfig
+              secret:
+                secretName: ingress-selfservice-kubeconfig

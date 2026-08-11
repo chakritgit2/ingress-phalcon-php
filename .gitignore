@@ -1,0 +1,7 @@
+/vendor/
+/composer.lock
+/node_modules/
+/public/css/app.css
+k8s/secret.yaml
+.env
+*.log

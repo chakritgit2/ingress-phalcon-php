@@ -1,0 +1,18 @@
+# Cluster-wide by design: the namespace/deployment picker must discover
+# across every namespace, and Namespaces are inherently cluster-scoped.
+# Accepted tradeoff (see plan doc): a compromised Pod could create/delete
+# Services anywhere, but cannot touch Deployments, Pods, or Secrets.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ingress-selfservice
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "create", "delete"]

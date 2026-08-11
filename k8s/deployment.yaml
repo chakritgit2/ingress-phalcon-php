@@ -1,0 +1,50 @@
+# NOTE: this container only exposes php-fpm on :9000 (no bundled nginx),
+# mirroring how the sibling hr-advws app was built — that implies an nginx
+# sidecar or shared ingress-controller config already exists for Phalcon
+# apps in this cluster. Confirm with whoever operates it and either add an
+# nginx sidecar container here or point the existing pattern at this Service.
+#
+# Kubernetes API access is via a kubeconfig file mounted from the
+# ingress-selfservice-kubeconfig Secret (see secret.example.yaml), pointed
+# to by the SERVER_CONFIG env var — not the automatic ServiceAccount token
+# mount. `serviceAccountName` is still set so the token embedded in that
+# kubeconfig is the one bound to this app's ClusterRole (see
+# clusterrole.yaml/clusterrolebinding.yaml) — generate the kubeconfig's
+# token from this same ServiceAccount, don't mix identities.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingress-selfservice
+  namespace: ingress-selfservice
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ingress-selfservice
+  template:
+    metadata:
+      labels:
+        app: ingress-selfservice
+    spec:
+      serviceAccountName: ingress-selfservice
+      containers:
+        - name: app
+          image: registry.example.com/ingress-selfservice:latest
+          ports:
+            - containerPort: 9000
+          env:
+            - name: SERVER_CONFIG
+              value: /etc/ingress-selfservice/kubeconfig
+          envFrom:
+            - configMapRef:
+                name: ingress-selfservice-config
+            - secretRef:
+                name: ingress-selfservice-secrets
+          volumeMounts:
+            - name: kubeconfig
+              mountPath: /etc/ingress-selfservice
+              readOnly: true
+      volumes:
+        - name: kubeconfig
+          secret:
+            secretName: ingress-selfservice-kubeconfig

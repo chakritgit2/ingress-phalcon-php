@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-selfservice-config
+  namespace: ingress-selfservice
+data:
+  K8S_NODE_IP: "192.168.33.31"
+  BASE_URI: "/"
+  GOOGLE_HD: "advws.com"
+  GOOGLE_REDIRECT_URI: "http://192.168.33.31:PLACEHOLDER/login/google/callback"
+  # GOOGLE_CLIENT_ID is not secret by Google's own design, but is kept in
+  # secret.example.yaml alongside its paired client_secret for simplicity —
+  # move it here instead if you'd rather keep the Secret to true secrets only.
