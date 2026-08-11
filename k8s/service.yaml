@@ -1,0 +1,15 @@
+# ClusterIP fronting this app's own UI — unrelated to the ephemeral NodePort
+# Services this app creates for other people's Deployments. Sits behind
+# whatever ingress/TLS pattern the org already uses for internal tools.
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingress-selfservice
+  namespace: ingress-selfservice
+spec:
+  type: ClusterIP
+  selector:
+    app: ingress-selfservice
+  ports:
+    - port: 80
+      targetPort: 9000

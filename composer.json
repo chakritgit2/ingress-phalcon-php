@@ -1,0 +1,19 @@
+{
+    "name": "advws/ingress-selfservice",
+    "description": "Self-service Kubernetes NodePort admin tool with Google SSO and audit logging",
+    "type": "project",
+    "license": "proprietary",
+    "require": {
+        "php": ">=8.4",
+        "guzzlehttp/guzzle": "^7.9",
+        "google/apiclient": "^2.18",
+        "symfony/yaml": "^7.1"
+    },
+    "require-dev": {
+        "phalcon/ide-stubs": "^5.9"
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "sort-packages": true
+    }
+}

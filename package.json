@@ -1,0 +1,12 @@
+{
+  "name": "ingress-advws-com",
+  "private": true,
+  "scripts": {
+    "build:css": "tailwindcss -i ./assets/css/app.css -o ./public/css/app.css --minify",
+    "watch:css": "tailwindcss -i ./assets/css/app.css -o ./public/css/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4",
+    "tailwindcss": "^4"
+  }
+}
