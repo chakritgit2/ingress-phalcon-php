@@ -1,7 +1,10 @@
 # Cluster-wide by design: the namespace/deployment picker must discover
 # across every namespace, and Namespaces are inherently cluster-scoped.
 # Accepted tradeoff (see plan doc): a compromised Pod could create/delete
-# Services anywhere, but cannot touch Deployments, Pods, or Secrets.
+# Services and Ingresses anywhere, and read (but not create/modify/delete)
+# any Secret cluster-wide — needed so listSecrets()/createIngress() can find
+# existing TLS certs by name. Still cannot touch Deployments or Pods, and
+# cannot write/delete Secrets.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -15,4 +18,10 @@ rules:
     verbs: ["get", "list"]
   - apiGroups: [""]
     resources: ["services"]
+    verbs: ["get", "list", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
     verbs: ["get", "list", "create", "delete"]

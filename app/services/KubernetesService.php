@@ -5,6 +5,11 @@ namespace App\Services;
 class KubernetesService implements KubernetesServiceInterface
 {
     private const DNS_1123_LABEL = '/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/';
+    // DNS-1123 subdomain: one or more dot-separated DNS-1123 labels — the
+    // format Kubernetes actually validates Secret names and Ingress hosts
+    // against, unlike Namespace/Service names which are restricted to a
+    // single label (no dots).
+    private const DNS_1123_SUBDOMAIN = '/^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/';
     private const REQUEST_ID_LABEL = 'ingress-selfservice.advws.com/request-id';
 
     private KubernetesClient $client;
@@ -50,6 +55,21 @@ class KubernetesService implements KubernetesServiceInterface
     }
 
     /**
+     * @return string[]
+     */
+    public function listSecrets(string $namespace): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $query = http_build_query(['fieldSelector' => 'type=kubernetes.io/tls']);
+        $result = $this->client->get("/api/v1/namespaces/{$namespace}/secrets?{$query}");
+
+        return array_map(
+            fn (array $item) => $item['metadata']['name'],
+            $result['items'] ?? []
+        );
+    }
+
+    /**
      * @return array{service_name: string, node_port: int, k8s_uid: string}
      */
     public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId): array
@@ -84,10 +104,7 @@ class KubernetesService implements KubernetesServiceInterface
             'metadata' => [
                 'generateName' => 'tmp-nodeport-',
                 'namespace' => $namespace,
-                'labels' => [
-                    'app.kubernetes.io/managed-by' => 'ingress-selfservice',
-                    self::REQUEST_ID_LABEL => (string) $requestId,
-                ],
+                'labels' => $this->buildManagedLabels($deploymentName, $requestId),
             ],
             'spec' => [
                 'type' => 'NodePort',
@@ -110,7 +127,116 @@ class KubernetesService implements KubernetesServiceInterface
     }
 
     /**
-     * @return array{service_name: string, node_port: int, k8s_uid: string}|null
+     * @return array{service_name: string, ingress_name: string, k8s_uid: string}
+     */
+    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
+        $targetPort = $this->assertValidPort($targetPort);
+        $host = $this->assertValidHost($host);
+        $secretName = $this->assertValidSubdomain($secretName, 'secret name');
+
+        // Same idempotency guard as createNodePortService, keyed off the
+        // Ingress this time (its backend service name is read back from it).
+        $existingIngress = $this->findIngressByRequestId($namespace, $requestId);
+        if ($existingIngress !== null) {
+            return $existingIngress;
+        }
+
+        $deployment = $this->getDeployment($namespace, $deploymentName);
+        if ($deployment === null) {
+            throw new KubernetesApiException("Deployment {$deploymentName} not found in namespace {$namespace}");
+        }
+
+        $selector = $deployment['spec']['selector']['matchLabels'] ?? [];
+        if (empty($selector)) {
+            throw new KubernetesApiException("Deployment {$deploymentName} has no matchLabels selector to target");
+        }
+
+        $labels = $this->buildManagedLabels($deploymentName, $requestId);
+
+        $existingService = $this->findServiceByRequestId($namespace, $requestId);
+        if ($existingService !== null) {
+            $serviceName = $existingService['service_name'];
+        } else {
+            $serviceBody = [
+                'apiVersion' => 'v1',
+                'kind' => 'Service',
+                'metadata' => [
+                    'generateName' => 'tmp-ingress-svc-',
+                    'namespace' => $namespace,
+                    'labels' => $labels,
+                ],
+                'spec' => [
+                    'type' => 'ClusterIP',
+                    'selector' => $selector,
+                    'ports' => [[
+                        'port' => $targetPort,
+                        'targetPort' => $targetPort,
+                        'protocol' => 'TCP',
+                    ]],
+                ],
+            ];
+            $createdService = $this->client->post("/api/v1/namespaces/{$namespace}/services", $serviceBody);
+            $serviceName = $createdService['metadata']['name'];
+        }
+
+        $ingressBody = [
+            'apiVersion' => 'networking.k8s.io/v1',
+            'kind' => 'Ingress',
+            'metadata' => [
+                'generateName' => 'tmp-ingress-',
+                'namespace' => $namespace,
+                'labels' => $labels,
+                'annotations' => [
+                    'kubernetes.io/ingress.class' => 'nginx',
+                ],
+            ],
+            'spec' => [
+                'rules' => [[
+                    'host' => $host,
+                    'http' => [
+                        'paths' => [[
+                            'path' => '/',
+                            'pathType' => 'ImplementationSpecific',
+                            'backend' => [
+                                'service' => [
+                                    'name' => $serviceName,
+                                    'port' => ['number' => $targetPort],
+                                ],
+                            ],
+                        ]],
+                    ],
+                ]],
+                'tls' => [[
+                    'hosts' => [$host],
+                    'secretName' => $secretName,
+                ]],
+            ],
+        ];
+
+        $createdIngress = $this->client->post("/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses", $ingressBody);
+
+        return [
+            'service_name' => $serviceName,
+            'ingress_name' => $createdIngress['metadata']['name'],
+            'k8s_uid' => $createdIngress['metadata']['uid'],
+        ];
+    }
+
+    private function buildManagedLabels(string $deploymentName, int $requestId): array
+    {
+        return [
+            'app.kubernetes.io/managed-by' => 'ingress-selfservice',
+            'advws-group' => 'company',
+            'k8s-app' => $deploymentName,
+            self::REQUEST_ID_LABEL => (string) $requestId,
+        ];
+    }
+
+    /**
+     * @return array{service_name: string, node_port: ?int, k8s_uid: string}|null
      */
     private function findServiceByRequestId(string $namespace, int $requestId): ?array
     {
@@ -126,8 +252,30 @@ class KubernetesService implements KubernetesServiceInterface
 
         return [
             'service_name' => $service['metadata']['name'],
-            'node_port' => $service['spec']['ports'][0]['nodePort'],
+            'node_port' => $service['spec']['ports'][0]['nodePort'] ?? null,
             'k8s_uid' => $service['metadata']['uid'],
+        ];
+    }
+
+    /**
+     * @return array{service_name: string, ingress_name: string, k8s_uid: string}|null
+     */
+    private function findIngressByRequestId(string $namespace, int $requestId): ?array
+    {
+        $query = http_build_query(['labelSelector' => self::REQUEST_ID_LABEL . '=' . $requestId]);
+        $result = $this->client->get("/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses?{$query}");
+        $items = $result['items'] ?? [];
+
+        if (empty($items)) {
+            return null;
+        }
+
+        $ingress = $items[0];
+
+        return [
+            'service_name' => $ingress['spec']['rules'][0]['http']['paths'][0]['backend']['service']['name'] ?? '',
+            'ingress_name' => $ingress['metadata']['name'],
+            'k8s_uid' => $ingress['metadata']['uid'],
         ];
     }
 
@@ -143,6 +291,22 @@ class KubernetesService implements KubernetesServiceInterface
                 throw $e;
             }
         }
+    }
+
+    public function deleteIngress(string $namespace, string $ingressName, string $serviceName): void
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $ingressName = $this->assertValidLabel($ingressName, 'ingress name');
+
+        try {
+            $this->client->delete("/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses/{$ingressName}");
+        } catch (KubernetesApiException $e) {
+            if (stripos($e->getMessage(), 'not found') === false) {
+                throw $e;
+            }
+        }
+
+        $this->deleteService($namespace, $serviceName);
     }
 
     public function getLastRequest(): ?array
@@ -164,5 +328,18 @@ class KubernetesService implements KubernetesServiceInterface
             throw new \InvalidArgumentException("Invalid port: {$port}");
         }
         return $port;
+    }
+
+    private function assertValidHost(string $host): string
+    {
+        return $this->assertValidSubdomain($host, 'host');
+    }
+
+    private function assertValidSubdomain(string $value, string $field): string
+    {
+        if (!preg_match(self::DNS_1123_SUBDOMAIN, $value) || strlen($value) > 253) {
+            throw new \InvalidArgumentException("Invalid {$field}: {$value}");
+        }
+        return $value;
     }
 }

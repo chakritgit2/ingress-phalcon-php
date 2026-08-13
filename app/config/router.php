@@ -17,6 +17,7 @@ $router->add('/logout', ['controller' => 'login', 'action' => 'logout'])->via(['
 $router->add('/ingress', ['controller' => 'ingress', 'action' => 'index'])->via(['GET']);
 $router->add('/ingress/create', ['controller' => 'ingress', 'action' => 'create'])->via(['GET']);
 $router->add('/ingress/api/deployments', ['controller' => 'ingress', 'action' => 'deploymentsApi'])->via(['GET']);
+$router->add('/ingress/api/secrets', ['controller' => 'ingress', 'action' => 'secretsApi'])->via(['GET']);
 $router->add('/ingress/store', ['controller' => 'ingress', 'action' => 'store'])->via(['POST']);
 $router->add('/ingress/{id:[0-9]+}/delete', ['controller' => 'ingress', 'action' => 'delete'])->via(['POST']);
 $router->add('/ingress/{id:[0-9]+}/retry', ['controller' => 'ingress', 'action' => 'retry'])->via(['POST']);

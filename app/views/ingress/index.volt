@@ -1,7 +1,7 @@
 {% extends "layouts/main.volt" %}
 {% block content %}
 <div class="mb-6 flex items-center justify-between">
-    <h1 class="text-2xl font-bold text-gray-900">Ingress (NodePort) ที่เปิดอยู่</h1>
+    <h1 class="text-2xl font-bold text-gray-900">Ingress ที่เปิดอยู่</h1>
     {% if currentUser.isDevops() %}
     <a href="/ingress/create" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700">
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -20,6 +20,7 @@
                 <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ใคร</th>
                 <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ใช้อะไร</th>
                 <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Namespace</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ประเภท</th>
                 <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ออกที่ไหน</th>
                 <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">เมื่อไหร</th>
                 <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">หมดอายุ</th>
@@ -34,7 +35,14 @@
                 <td class="px-4 py-3 text-gray-700">{{ row.deployment_name }}</td>
                 <td class="px-4 py-3 text-gray-700">{{ row.namespace }}</td>
                 <td class="px-4 py-3 text-gray-700">
-                    {% if row.node_port %}{{ row.node_ip }}:{{ row.node_port }}{% else %}<span class="text-gray-400">รอดำเนินการ</span>{% endif %}
+                    {% if row.request_type == 'ingress' %}Ingress + TLS{% else %}NodePort{% endif %}
+                </td>
+                <td class="px-4 py-3 text-gray-700">
+                    {% if row.request_type == 'ingress' %}
+                        {% if row.host %}https://{{ row.host }}{% else %}<span class="text-gray-400">รอดำเนินการ</span>{% endif %}
+                    {% else %}
+                        {% if row.node_port %}{{ row.node_ip }}:{{ row.node_port }}{% else %}<span class="text-gray-400">รอดำเนินการ</span>{% endif %}
+                    {% endif %}
                 </td>
                 <td class="px-4 py-3 text-gray-700">{{ row.created_at }}</td>
                 <td class="px-4 py-3 text-gray-700">
@@ -66,7 +74,7 @@
                 </td>
             </tr>
             {% else %}
-            <tr><td class="px-4 py-8 text-center text-gray-500" colspan="8">
+            <tr><td class="px-4 py-8 text-center text-gray-500" colspan="9">
                 <div class="animate-fade-in flex flex-col items-center gap-2">
                     <svg class="h-8 w-8 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M3 9.5 5.5 4h13L21 9.5m-18 0V19a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V9.5m-18 0h18M9 13.5a3 3 0 0 0 6 0"/>
