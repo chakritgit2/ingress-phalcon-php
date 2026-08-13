@@ -12,10 +12,8 @@
         </svg>
         เข้าสู่ระบบด้วย Google
     </a>
-    {% if mockLoginEnabled %}
     <a href="/login/mock" class="mt-3 inline-flex items-center justify-center gap-2 rounded-lg border border-dashed border-yellow-400 bg-yellow-50 px-5 py-2.5 text-sm font-medium text-yellow-800 shadow-sm transition hover:bg-yellow-100">
         Mock Login (Dev only)
     </a>
-    {% endif %}
 </div>
 {% endblock %}
