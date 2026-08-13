@@ -11,6 +11,8 @@ class LoginController extends ControllerBase
         if ($this->currentUser() !== null) {
             return $this->response->redirect('/ingress');
         }
+
+        $this->view->setVar('mockLoginEnabled', getenv('APP_ENV') === 'local');
     }
 
     /**
