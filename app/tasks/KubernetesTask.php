@@ -42,15 +42,28 @@ class KubernetesTask extends Task
 
             try {
                 if ($command->action === 'create') {
-                    $created = $this->kubernetesService->createNodePortService(
-                        $row->namespace,
-                        $row->deployment_name,
-                        $row->target_port,
-                        $row->id
-                    );
+                    if ($row->request_type === 'ingress') {
+                        $created = $this->kubernetesService->createIngress(
+                            $row->namespace,
+                            $row->deployment_name,
+                            $row->target_port,
+                            $row->host,
+                            $row->secret_name,
+                            $row->id
+                        );
+                        $row->service_name = $created['service_name'];
+                        $row->ingress_name = $created['ingress_name'];
+                    } else {
+                        $created = $this->kubernetesService->createNodePortService(
+                            $row->namespace,
+                            $row->deployment_name,
+                            $row->target_port,
+                            $row->id
+                        );
+                        $row->service_name = $created['service_name'];
+                        $row->node_port = $created['node_port'];
+                    }
 
-                    $row->service_name = $created['service_name'];
-                    $row->node_port = $created['node_port'];
                     $row->k8s_uid = $created['k8s_uid'];
                     $row->status = 'active';
                     $row->expires_at = date('Y-m-d H:i:s', time() + $row->schedule_end_minutes * 60);
@@ -65,9 +78,14 @@ class KubernetesTask extends Task
                         'deployment_name' => $row->deployment_name,
                         'node_port' => $row->node_port,
                         'node_ip' => $row->node_ip,
+                        'detail' => ['host' => $row->host, 'secret_name' => $row->secret_name],
                     ]);
                 } else {
-                    $this->kubernetesService->deleteService($row->namespace, $row->service_name);
+                    if ($row->request_type === 'ingress') {
+                        $this->kubernetesService->deleteIngress($row->namespace, $row->ingress_name, $row->service_name);
+                    } else {
+                        $this->kubernetesService->deleteService($row->namespace, $row->service_name);
+                    }
 
                     $row->status = 'deleted';
                     $row->deleted_at = date('Y-m-d H:i:s');
@@ -81,6 +99,7 @@ class KubernetesTask extends Task
                         'deployment_name' => $row->deployment_name,
                         'node_port' => $row->node_port,
                         'node_ip' => $row->node_ip,
+                        'detail' => ['host' => $row->host, 'secret_name' => $row->secret_name],
                     ]);
                 }
 
@@ -103,7 +122,7 @@ class KubernetesTask extends Task
                         'actor_user_id' => $command->requested_by_user_id,
                         'namespace' => $row->namespace,
                         'deployment_name' => $row->deployment_name,
-                        'detail' => ['error' => $e->getMessage()],
+                        'detail' => ['error' => $e->getMessage(), 'host' => $row->host, 'secret_name' => $row->secret_name],
                     ]
                 );
 
@@ -111,8 +130,17 @@ class KubernetesTask extends Task
             } finally {
                 // Captured regardless of outcome — null if the call never
                 // got far enough to actually send anything (e.g. the
-                // pre-create Deployment lookup failed).
-                $lastRequest = $this->kubernetesService->getLastRequest();
+                // pre-create Deployment lookup failed). Guarded because if
+                // $this->kubernetesService itself failed to construct (e.g.
+                // an unreadable/invalid SERVER_CONFIG), re-accessing it here
+                // retries that same failing construction — without this
+                // guard that crashes the whole batch instead of just
+                // marking this one command failed.
+                try {
+                    $lastRequest = $this->kubernetesService->getLastRequest();
+                } catch (\Throwable $e) {
+                    $lastRequest = null;
+                }
                 $command->request_payload = $lastRequest !== null ? json_encode($lastRequest) : null;
             }
 
@@ -136,7 +164,11 @@ class KubernetesTask extends Task
             $count++;
 
             try {
-                $this->kubernetesService->deleteService($row->namespace, $row->service_name);
+                if ($row->request_type === 'ingress') {
+                    $this->kubernetesService->deleteIngress($row->namespace, $row->ingress_name, $row->service_name);
+                } else {
+                    $this->kubernetesService->deleteService($row->namespace, $row->service_name);
+                }
 
                 $row->status = 'expired';
                 $row->deleted_at = date('Y-m-d H:i:s');

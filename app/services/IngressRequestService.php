@@ -19,14 +19,16 @@ class IngressRequestService
     private const MAX_SCHEDULE_MINUTES = 10080; // 7 days
 
     private string $nodeIp;
+    private AuditLogService $auditLogService;
 
-    public function __construct(string $nodeIp)
+    public function __construct(string $nodeIp, AuditLogService $auditLogService)
     {
         $this->nodeIp = $nodeIp;
+        $this->auditLogService = $auditLogService;
     }
 
     /**
-     * @param array{developer_name: string, namespace: string, deployment_name: string, target_port: int, schedule_end_minutes: int} $data
+     * @param array{developer_name: string, namespace: string, deployment_name: string, target_port: int, schedule_end_minutes: int, request_type?: string, host?: string, secret_name?: string} $data
      */
     public function create(array $data, Users $user): IngressRequests
     {
@@ -35,6 +37,9 @@ class IngressRequestService
         $deploymentName = trim((string) $data['deployment_name']);
         $targetPort = (int) $data['target_port'];
         $scheduleMinutes = (int) $data['schedule_end_minutes'];
+        $requestType = (string) ($data['request_type'] ?? 'nodeport');
+        $host = trim((string) ($data['host'] ?? ''));
+        $secretName = trim((string) ($data['secret_name'] ?? ''));
 
         if ($developerName === '') {
             throw new \InvalidArgumentException('กรุณาระบุชื่อ Developer');
@@ -45,13 +50,27 @@ class IngressRequestService
         if ($scheduleMinutes < 1 || $scheduleMinutes > self::MAX_SCHEDULE_MINUTES) {
             throw new \InvalidArgumentException('Schedule End ต้องอยู่ระหว่าง 1-' . self::MAX_SCHEDULE_MINUTES . ' นาที');
         }
+        if (!in_array($requestType, ['nodeport', 'ingress'], true)) {
+            throw new \InvalidArgumentException('ประเภท Ingress ไม่ถูกต้อง');
+        }
+        if ($requestType === 'ingress') {
+            if ($host === '') {
+                throw new \InvalidArgumentException('กรุณาระบุ Host (โดเมน)');
+            }
+            if ($secretName === '') {
+                throw new \InvalidArgumentException('กรุณาเลือก Secret Name (TLS)');
+            }
+        }
 
         $row = new IngressRequests();
         $row->developer_name = $developerName;
         $row->namespace = $namespace;
         $row->deployment_name = $deploymentName;
+        $row->request_type = $requestType;
         $row->target_port = $targetPort;
         $row->node_ip = $this->nodeIp;
+        $row->host = $requestType === 'ingress' ? $host : null;
+        $row->secret_name = $requestType === 'ingress' ? $secretName : null;
         $row->schedule_end_minutes = $scheduleMinutes;
         $row->created_by_user_id = $user->id;
         $row->status = 'pending';
@@ -63,7 +82,7 @@ class IngressRequestService
             )));
         }
 
-        $this->enqueue($row, 'create', $user);
+        $this->enqueue($row, 'create', $user, 'ingress_requested');
 
         return $row;
     }
@@ -79,7 +98,7 @@ class IngressRequestService
             )));
         }
 
-        $this->enqueue($row, 'delete', $user);
+        $this->enqueue($row, 'delete', $user, 'ingress_delete_requested');
     }
 
     /**
@@ -109,10 +128,10 @@ class IngressRequestService
             )));
         }
 
-        $this->enqueue($row, $lastCommand->action, $user);
+        $this->enqueue($row, $lastCommand->action, $user, 'ingress_retry_requested');
     }
 
-    private function enqueue(IngressRequests $row, string $action, Users $user): void
+    private function enqueue(IngressRequests $row, string $action, Users $user, string $auditEvent): void
     {
         $command = new K8sCommands();
         $command->ingress_request_id = $row->id;
@@ -126,5 +145,24 @@ class IngressRequestService
                 $command->getMessages()
             )));
         }
+
+        // Logged at request time (not just once KubernetesTask actually
+        // processes it) so there's a trail of who asked for what even
+        // before — or if — the background worker ever picks it up.
+        $this->auditLogService->log($auditEvent, AuditLogService::actorLabelFor($user), [
+            'ingress_request_id' => $row->id,
+            'actor_user_id' => $user->id,
+            'namespace' => $row->namespace,
+            'deployment_name' => $row->deployment_name,
+            'node_port' => $row->node_port,
+            'node_ip' => $row->node_ip,
+            'detail' => [
+                'action' => $action,
+                'request_type' => $row->request_type,
+                'host' => $row->host,
+                'secret_name' => $row->secret_name,
+                'target_port' => $row->target_port,
+            ],
+        ]);
     }
 }

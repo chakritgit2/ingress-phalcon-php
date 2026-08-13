@@ -11,10 +11,14 @@ class IngressRequests extends Model
     public string $developer_name;
     public string $namespace;
     public string $deployment_name;
+    public string $request_type = 'nodeport';
     public int $target_port;
     public ?string $service_name = null;
+    public ?string $ingress_name = null;
     public ?int $node_port = null;
     public string $node_ip;
+    public ?string $host = null;
+    public ?string $secret_name = null;
     public int $schedule_end_minutes;
     public int $created_by_user_id;
     public ?string $created_at = null;
@@ -42,6 +46,10 @@ class IngressRequests extends Model
 
     public function address(): string
     {
+        if ($this->request_type === 'ingress') {
+            return $this->host !== null ? "https://{$this->host}" : 'รอดำเนินการ';
+        }
+
         return $this->node_port !== null ? "{$this->node_ip}:{$this->node_port}" : 'รอดำเนินการ';
     }
 

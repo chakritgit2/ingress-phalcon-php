@@ -33,6 +33,21 @@ class IngressController extends ControllerBase
         }
     }
 
+    public function secretsApiAction()
+    {
+        $namespace = (string) $this->request->getQuery('namespace', 'string', '');
+
+        $this->response->setContentType('application/json');
+
+        try {
+            $secrets = $this->kubernetesService->listSecrets($namespace);
+            return $this->response->setJsonContent(['secrets' => $secrets]);
+        } catch (\Throwable $e) {
+            $this->response->setStatusCode(400);
+            return $this->response->setJsonContent(['error' => $e->getMessage()]);
+        }
+    }
+
     public function storeAction()
     {
         if (!$this->request->isPost() || !$this->security->checkToken()) {
@@ -44,7 +59,10 @@ class IngressController extends ControllerBase
             'developer_name' => $this->request->getPost('developer_name', 'string'),
             'namespace' => $this->request->getPost('namespace', 'string'),
             'deployment_name' => $this->request->getPost('deployment_name', 'string'),
+            'request_type' => $this->request->getPost('request_type', 'string', 'nodeport'),
             'target_port' => $this->request->getPost('target_port', 'int', 80),
+            'host' => $this->request->getPost('host', 'string', ''),
+            'secret_name' => $this->request->getPost('secret_name', 'string', ''),
             'schedule_end_minutes' => $this->request->getPost('schedule_end_minutes', 'int'),
         ];
 

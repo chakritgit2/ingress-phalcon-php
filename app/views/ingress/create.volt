@@ -1,9 +1,21 @@
 {% extends "layouts/main.volt" %}
 {% block content %}
-<h1 class="mb-6 text-2xl font-bold text-gray-900">สร้าง Ingress ใหม่ (NodePort)</h1>
+<h1 class="mb-6 text-2xl font-bold text-gray-900">สร้าง Ingress ใหม่</h1>
 
 <form method="post" action="/ingress/store" class="max-w-md space-y-5">
     <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
+
+    <div>
+        <label class="mb-1.5 block text-sm font-medium text-gray-700">ประเภท *</label>
+        <div class="flex gap-4">
+            <label class="flex items-center gap-1.5 text-sm text-gray-700">
+                <input type="radio" name="request_type" value="nodeport" checked> NodePort ชั่วคราว
+            </label>
+            <label class="flex items-center gap-1.5 text-sm text-gray-700">
+                <input type="radio" name="request_type" value="ingress"> Ingress + TLS (ถาวรตามโดเมน)
+            </label>
+        </div>
+    </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-gray-700" for="developer_name">ใคร (Developer Name) *</label>
@@ -38,6 +50,20 @@
         <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="number" id="target_port" name="target_port" value="80" min="1" max="65535" required>
     </div>
 
+    <div id="ingress_fields" class="hidden space-y-5">
+        <div>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700" for="host">Host (โดเมน) *</label>
+            <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="text" id="host" name="host" placeholder="myapp.advws.com">
+        </div>
+
+        <div>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700" for="secret_name">Secret Name (TLS) *</label>
+            <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400" id="secret_name" name="secret_name" disabled>
+                <option value="">-- เลือก Namespace ก่อน --</option>
+            </select>
+        </div>
+    </div>
+
     <div>
         <label class="mb-1.5 block text-sm font-medium text-gray-700" for="schedule_end_minutes">Schedule End (นาที) *</label>
         <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="number" id="schedule_end_minutes" name="schedule_end_minutes" min="1" max="10080" required>
@@ -58,37 +84,80 @@ document.getElementById('namespace').addEventListener('change', function () {
 
     if (!ns) {
         depSelect.innerHTML = '<option value="">-- เลือก Namespace ก่อน --</option>';
+    } else {
+        spinner.classList.remove('hidden');
+
+        fetch('/ingress/api/deployments?namespace=' + encodeURIComponent(ns))
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                depSelect.innerHTML = '';
+                if (!data.deployments || data.deployments.length === 0) {
+                    depSelect.innerHTML = '<option value="">-- ไม่พบ Deployment --</option>';
+                    return;
+                }
+                var placeholder = document.createElement('option');
+                placeholder.value = '';
+                placeholder.textContent = '-- เลือก Deployment --';
+                depSelect.appendChild(placeholder);
+                data.deployments.forEach(function (d) {
+                    var opt = document.createElement('option');
+                    opt.value = d.name;
+                    opt.textContent = d.name + ' (replicas: ' + d.replicas + ')';
+                    depSelect.appendChild(opt);
+                });
+                depSelect.disabled = false;
+            })
+            .catch(function () {
+                depSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
+            })
+            .finally(function () {
+                spinner.classList.add('hidden');
+            });
+    }
+
+    var secretSelect = document.getElementById('secret_name');
+    secretSelect.disabled = true;
+    secretSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+
+    if (!ns) {
+        secretSelect.innerHTML = '<option value="">-- เลือก Namespace ก่อน --</option>';
         return;
     }
 
-    spinner.classList.remove('hidden');
-
-    fetch('/ingress/api/deployments?namespace=' + encodeURIComponent(ns))
+    fetch('/ingress/api/secrets?namespace=' + encodeURIComponent(ns))
         .then(function (res) { return res.json(); })
         .then(function (data) {
-            depSelect.innerHTML = '';
-            if (!data.deployments || data.deployments.length === 0) {
-                depSelect.innerHTML = '<option value="">-- ไม่พบ Deployment --</option>';
+            secretSelect.innerHTML = '';
+            if (!data.secrets || data.secrets.length === 0) {
+                secretSelect.innerHTML = '<option value="">-- ไม่พบ Secret (TLS) --</option>';
                 return;
             }
             var placeholder = document.createElement('option');
             placeholder.value = '';
-            placeholder.textContent = '-- เลือก Deployment --';
-            depSelect.appendChild(placeholder);
-            data.deployments.forEach(function (d) {
+            placeholder.textContent = '-- เลือก Secret Name --';
+            secretSelect.appendChild(placeholder);
+            data.secrets.forEach(function (name) {
                 var opt = document.createElement('option');
-                opt.value = d.name;
-                opt.textContent = d.name + ' (replicas: ' + d.replicas + ')';
-                depSelect.appendChild(opt);
+                opt.value = name;
+                opt.textContent = name;
+                secretSelect.appendChild(opt);
             });
-            depSelect.disabled = false;
+            secretSelect.disabled = false;
         })
         .catch(function () {
-            depSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
-        })
-        .finally(function () {
-            spinner.classList.add('hidden');
+            secretSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
         });
+});
+
+var ingressFields = document.getElementById('ingress_fields');
+var hostInput = document.getElementById('host');
+document.querySelectorAll('input[name="request_type"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+        var isIngress = this.value === 'ingress' && this.checked;
+        ingressFields.classList.toggle('hidden', !isIngress);
+        hostInput.required = isIngress;
+        document.getElementById('secret_name').required = isIngress;
+    });
 });
 </script>
 {% endblock %}
