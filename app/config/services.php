@@ -38,14 +38,16 @@ $di->setShared('url', function () use ($config) {
 });
 
 $di->setShared('session', function () use ($config) {
-    // 'secure' is env-gated: local dev runs over plain HTTP, and a secure
-    // cookie is silently dropped by the browser on a non-HTTPS origin,
-    // which would break login there. Everywhere else is assumed to sit
-    // behind HTTPS.
+    // 'secure' is env-gated: a secure cookie is silently dropped by the
+    // browser on a non-HTTPS origin, which would break login there. Local
+    // dev runs over plain HTTP, hence the APP_ENV check. APP_HTTPS=0 is a
+    // separate, explicit opt-out for deployments that are legitimately
+    // HTTP-only forever (e.g. an internal IP:NodePort with no domain/TLS)
+    // — anything else (unset included) keeps the safe HTTPS-assumed default.
     session_set_cookie_params([
         'lifetime' => 0,
         'path'     => '/',
-        'secure'   => getenv('APP_ENV') !== 'local',
+        'secure'   => getenv('APP_ENV') !== 'local' && getenv('APP_HTTPS') !== '0',
         'httponly' => true,
         'samesite' => 'Lax',
     ]);
