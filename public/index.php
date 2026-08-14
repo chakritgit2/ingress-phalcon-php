@@ -21,7 +21,15 @@ try {
 
     echo $application->handle($_SERVER['REQUEST_URI'])->getContent();
 } catch (\Throwable $e) {
-    error_log($e->getMessage() . "\n" . $e->getTraceAsString());
+    $errorId = substr(bin2hex(random_bytes(4)), 0, 8);
+    error_log(sprintf(
+        "[%s] %s %s: %s\n%s",
+        $errorId,
+        $_SERVER['REQUEST_METHOD'] ?? '-',
+        $_SERVER['REQUEST_URI'] ?? '-',
+        $e->getMessage(),
+        $e->getTraceAsString()
+    ));
     http_response_code(500);
-    echo 'Internal Server Error';
+    echo "Internal Server Error (ref: {$errorId})";
 }
