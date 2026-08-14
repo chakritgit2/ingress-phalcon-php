@@ -27,6 +27,11 @@ class KubernetesTask extends Task
      */
     public function processCommandsAction(): void
     {
+        if (!$this->settingsService->isBotEnabled()) {
+            echo "skip     bot is disabled\n";
+            return;
+        }
+
         $commands = K8sCommands::find([
             'conditions' => 'status = :status:',
             'bind' => ['status' => 'pending'],
@@ -153,6 +158,11 @@ class KubernetesTask extends Task
 
     public function pruneExpiredAction(): void
     {
+        if (!$this->settingsService->isBotEnabled()) {
+            echo "skip     bot is disabled\n";
+            return;
+        }
+
         $rows = IngressRequests::find([
             'conditions' => 'status = :status: AND expires_at <= :now:',
             'bind' => ['status' => 'active', 'now' => date('Y-m-d H:i:s')],

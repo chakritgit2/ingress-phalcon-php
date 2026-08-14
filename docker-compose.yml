@@ -4,6 +4,11 @@ services:
     image: ingress-selfservice:latest
     container_name: ingress-app
     env_file: .env
+    volumes:
+      # DEV-ONLY: bind-mounts app/ so edits to controllers/services/views/etc.
+      # show up without a rebuild. Harmless in prod too (same content as the
+      # image), but only worth the mount for local iteration.
+      - ./app:/app/app
     depends_on:
       mysql:
         condition: service_healthy

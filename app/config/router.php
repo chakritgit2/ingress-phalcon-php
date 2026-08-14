@@ -9,6 +9,7 @@ $router->setDefaultNamespace('App\\Controllers');
 $router->add('/', ['controller' => 'ingress', 'action' => 'index']);
 
 $router->add('/login', ['controller' => 'login', 'action' => 'index'])->via(['GET']);
+$router->add('/login', ['controller' => 'login', 'action' => 'login'])->via(['POST']);
 $router->add('/login/google', ['controller' => 'login', 'action' => 'google'])->via(['GET']);
 $router->add('/login/google/callback', ['controller' => 'login', 'action' => 'googleCallback'])->via(['GET']);
 $router->add('/login/mock', ['controller' => 'login', 'action' => 'mockLogin'])->via(['GET']); // dev-only, see LoginController::mockLoginAction
@@ -21,8 +22,10 @@ $router->add('/ingress/api/secrets', ['controller' => 'ingress', 'action' => 'se
 $router->add('/ingress/store', ['controller' => 'ingress', 'action' => 'store'])->via(['POST']);
 $router->add('/ingress/{id:[0-9]+}/delete', ['controller' => 'ingress', 'action' => 'delete'])->via(['POST']);
 $router->add('/ingress/{id:[0-9]+}/retry', ['controller' => 'ingress', 'action' => 'retry'])->via(['POST']);
+$router->add('/ingress/toggle-bot', ['controller' => 'ingress', 'action' => 'toggleBot'])->via(['POST']);
 
 $router->add('/audit', ['controller' => 'audit', 'action' => 'index'])->via(['GET']);
+$router->add('/audit/security', ['controller' => 'audit', 'action' => 'security'])->via(['GET']);
 $router->add('/audit/{id:[0-9]+}', ['controller' => 'audit', 'action' => 'show'])->via(['GET']);
 
 $router->notFound(['controller' => 'error', 'action' => 'notFound']);

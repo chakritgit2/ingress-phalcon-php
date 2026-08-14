@@ -24,7 +24,7 @@ class AuthMiddleware extends Injectable
      * forward to ingress/index instead.
      */
     private const DEVOPS_ONLY_ACTIONS = [
-        'ingress' => ['create', 'store', 'delete', 'deploymentsApi'],
+        'ingress' => ['create', 'store', 'delete', 'deploymentsApi', 'toggleBot'],
     ];
 
     public function beforeExecuteRoute(Event $event, Dispatcher $dispatcher): bool

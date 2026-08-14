@@ -1,8 +1,9 @@
+.git
+.env
+*.log
 /vendor/
 /node_modules/
 /public/css/app.css
 k8s/secret.yaml
 k8s/kubeconfig-secret.yaml
 k8s/local-kubeconfig.yaml
-.env
-*.log

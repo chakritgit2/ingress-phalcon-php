@@ -7,11 +7,12 @@ use Phalcon\Mvc\Model;
 class Users extends Model
 {
     public ?int $id = null;
-    public string $google_sub;
+    public ?string $google_sub = null;
     public string $email;
     public string $name;
     public ?string $avatar_url = null;
-    public string $hosted_domain;
+    public ?string $hosted_domain = null;
+    public ?string $password_hash = null;
     public string $role;
     public int $is_active;
     public ?string $last_login_at = null;

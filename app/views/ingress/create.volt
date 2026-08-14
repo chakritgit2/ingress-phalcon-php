@@ -7,14 +7,27 @@
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-gray-700">ประเภท *</label>
-        <div class="flex gap-4">
-            <label class="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="radio" name="request_type" value="nodeport" checked> NodePort ชั่วคราว
+        <div class="inline-flex rounded-lg bg-gray-100 p-1">
+            <label class="cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium text-gray-600 transition has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-sm">
+                <input type="radio" name="request_type" value="nodeport" checked class="sr-only">
+                NodePort ชั่วคราว
             </label>
-            <label class="flex items-center gap-1.5 text-sm text-gray-700">
-                <input type="radio" name="request_type" value="ingress"> Ingress + TLS (ถาวรตามโดเมน)
+            <label class="cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium text-gray-600 transition has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-sm">
+                <input type="radio" name="request_type" value="ingress" class="sr-only">
+                Ingress + TLS
             </label>
         </div>
+
+        <p id="type_desc_nodeport" class="mt-2 text-xs text-gray-500">เข้าถึงผ่าน <code class="rounded bg-gray-100 px-1 py-0.5 text-[11px]">node_ip:node_port</code> โดยตรง ไม่ต้องมีโดเมนหรือ TLS</p>
+        <p id="type_desc_ingress" class="mt-2 hidden text-xs text-gray-500">เข้าถึงผ่านโดเมนที่กำหนดเอง (HTTPS) ต้องกรอก Host และเลือก TLS Secret</p>
+
+        <p class="mt-2 flex items-start gap-1.5 text-xs text-gray-500">
+            <svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <circle cx="12" cy="12" r="9"/>
+                <path stroke-linecap="round" d="M12 11v5m0-8h.01"/>
+            </svg>
+            <span>ทั้งสองแบบถูกลบอัตโนมัติเมื่อครบกำหนดใน "Schedule End" เหมือนกัน — "ถาวรตามโดเมน" หมายถึงรูปแบบการเข้าถึงเท่านั้น ไม่ใช่ว่าจะไม่ถูกลบ</span>
+        </p>
     </div>
 
     <div>
@@ -151,10 +164,14 @@ document.getElementById('namespace').addEventListener('change', function () {
 
 var ingressFields = document.getElementById('ingress_fields');
 var hostInput = document.getElementById('host');
+var typeDescNodeport = document.getElementById('type_desc_nodeport');
+var typeDescIngress = document.getElementById('type_desc_ingress');
 document.querySelectorAll('input[name="request_type"]').forEach(function (radio) {
     radio.addEventListener('change', function () {
         var isIngress = this.value === 'ingress' && this.checked;
         ingressFields.classList.toggle('hidden', !isIngress);
+        typeDescNodeport.classList.toggle('hidden', isIngress);
+        typeDescIngress.classList.toggle('hidden', !isIngress);
         hostInput.required = isIngress;
         document.getElementById('secret_name').required = isIngress;
     });

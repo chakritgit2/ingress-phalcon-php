@@ -5,6 +5,7 @@ use App\Services\KubeconfigLoader;
 use App\Services\KubernetesClient;
 use App\Services\KubernetesService;
 use App\Services\MockKubernetesService;
+use App\Services\SettingsService;
 use Phalcon\Autoload\Loader;
 use Phalcon\Cli\Console;
 use Phalcon\Cli\Dispatcher as CliDispatcher;
@@ -59,6 +60,10 @@ $di->setShared('kubernetesService', function () use ($config) {
 });
 
 $di->setShared('auditLogService', fn () => new AuditLogService());
+
+$di->setShared('settingsService', function () {
+    return new SettingsService($this->get('auditLogService'));
+});
 
 $di->setShared('dispatcher', function () {
     $dispatcher = new CliDispatcher();

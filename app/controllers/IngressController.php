@@ -3,6 +3,7 @@
 namespace App\Controllers;
 
 use App\Models\IngressRequests;
+use App\Services\AuditLogService;
 
 class IngressController extends ControllerBase
 {
@@ -10,6 +11,31 @@ class IngressController extends ControllerBase
     {
         $rows = IngressRequests::find(['order' => 'created_at DESC', 'limit' => 100]);
         $this->view->setVar('rows', $rows);
+        $this->view->setVar('botEnabled', $this->settingsService->isBotEnabled());
+        $this->view->setVar('botKillSwitchActive', $this->settingsService->isEnvKillSwitchActive());
+    }
+
+    public function toggleBotAction()
+    {
+        if (!$this->request->isPost() || !$this->security->checkToken()) {
+            $this->flash->error('คำขอไม่ถูกต้อง (CSRF)');
+            return $this->response->redirect('/ingress');
+        }
+
+        if ($this->settingsService->isEnvKillSwitchActive()) {
+            $this->flash->error('บอทถูกบังคับปิดโดยตัวแปรระบบ (BOT_ENABLED) ไม่สามารถเปิดผ่านหน้านี้ได้');
+            return $this->response->redirect('/ingress');
+        }
+
+        $newState = !$this->settingsService->isBotEnabled();
+        $this->settingsService->setBotEnabled(
+            $newState,
+            AuditLogService::actorLabelFor($this->currentUser()),
+            $this->currentUser()->id
+        );
+
+        $this->flash->success($newState ? 'เปิดบอทแล้ว' : 'ปิดบอทแล้ว คำขอใหม่จะค้างจนกว่าจะเปิดอีกครั้ง');
+        return $this->response->redirect('/ingress');
     }
 
     public function createAction(): void
