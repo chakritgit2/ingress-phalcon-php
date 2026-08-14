@@ -24,6 +24,27 @@ class AuditController extends ControllerBase
         $this->view->setVar('page', $page);
     }
 
+    /**
+     * Events that aren't tied to any ingress_requests row (login attempts,
+     * bot toggles) never show up in indexAction/showAction above — those
+     * only ever query by ingress_request_id. This is the one place to see
+     * them without querying audit_log directly.
+     */
+    public function securityAction(): void
+    {
+        $page = max(1, (int) $this->request->getQuery('page', 'int', 1));
+
+        $events = AuditLog::find([
+            'conditions' => "event_type IN ('login', 'login_rejected', 'bot_enabled', 'bot_disabled')",
+            'order' => 'created_at DESC',
+            'limit' => self::PAGE_SIZE,
+            'offset' => self::PAGE_SIZE * ($page - 1),
+        ]);
+
+        $this->view->setVar('events', $events);
+        $this->view->setVar('page', $page);
+    }
+
     public function showAction($id)
     {
         $row = IngressRequests::findFirst((int) $id);

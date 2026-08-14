@@ -9,6 +9,7 @@ use App\Services\KubeconfigLoader;
 use App\Services\KubernetesClient;
 use App\Services\KubernetesService;
 use App\Services\MockKubernetesService;
+use App\Services\SettingsService;
 use Phalcon\Cache\Cache;
 use Phalcon\Db\Adapter\Pdo\Mysql as MysqlAdapter;
 use Phalcon\Di\FactoryDefault;
@@ -21,7 +22,7 @@ use Phalcon\Mvc\Url as UrlResolver;
 use Phalcon\Mvc\View;
 use Phalcon\Session\Adapter\Stream as SessionStream;
 use Phalcon\Session\Manager as SessionManager;
-use Phalcon\Storage\Adapter\Stream as StreamStorage;
+use Phalcon\Cache\Adapter\Stream as CacheStream;
 use Phalcon\Storage\SerializerFactory;
 
 /** @var \Phalcon\Config\Config $config */
@@ -37,6 +38,18 @@ $di->setShared('url', function () use ($config) {
 });
 
 $di->setShared('session', function () use ($config) {
+    // 'secure' is env-gated: local dev runs over plain HTTP, and a secure
+    // cookie is silently dropped by the browser on a non-HTTPS origin,
+    // which would break login there. Everywhere else is assumed to sit
+    // behind HTTPS.
+    session_set_cookie_params([
+        'lifetime' => 0,
+        'path'     => '/',
+        'secure'   => getenv('APP_ENV') !== 'local',
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+
     $session = new SessionManager();
     $files = new SessionStream(['savePath' => sys_get_temp_dir()]);
     $session->setAdapter($files);
@@ -80,7 +93,7 @@ $di->setShared('flash', function () {
 
 $di->setShared('cache', function () {
     $serializerFactory = new SerializerFactory();
-    $adapter = new StreamStorage($serializerFactory, [
+    $adapter = new CacheStream($serializerFactory, [
         'storageDir' => sys_get_temp_dir() . '/ingress-cache/',
     ]);
     return new Cache($adapter);
@@ -101,6 +114,9 @@ $di->setShared('view', function () use ($config) {
             $volt->setOptions([
                 'path'      => $voltCompiledPath,
                 'separator' => '_',
+                // DEV-ONLY: forces recompilation on every request so bind-mounted
+                // template edits (see docker-compose.yml) show up immediately.
+                'always'    => getenv('APP_ENV') === 'local',
             ]);
             return $volt;
         },
@@ -166,6 +182,10 @@ $di->setShared('authService', function () {
 
 $di->setShared('auditLogService', function () {
     return new AuditLogService();
+});
+
+$di->setShared('settingsService', function () {
+    return new SettingsService($this->get('auditLogService'));
 });
 
 $di->setShared('ingressRequestService', function () use ($config) {

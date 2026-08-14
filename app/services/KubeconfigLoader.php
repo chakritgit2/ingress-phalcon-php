@@ -5,24 +5,26 @@ namespace App\Services;
 use Symfony\Component\Yaml\Yaml;
 
 /**
- * Parses a standard kubeconfig YAML file (the same format `~/.kube/config`
- * uses) into the pieces KubernetesClient needs. The path is supplied via
- * the SERVER_CONFIG env var — in-cluster this points at a kubeconfig
+ * Parses a standard kubeconfig YAML (the same format `~/.kube/config` uses)
+ * into the pieces KubernetesClient needs. Supplied via the SERVER_CONFIG env
+ * var, either as a file path — in-cluster this points at a kubeconfig
  * mounted from a Secret; locally it can point at a developer's own
- * kubeconfig or a scoped one generated for this app's ServiceAccount.
+ * kubeconfig — or as the raw kubeconfig YAML inline.
  */
 class KubeconfigLoader
 {
     /**
      * @return array{host: string, port: int, token: string, ca_path: ?string}
      */
-    public static function load(string $path): array
+    public static function load(string $pathOrYaml): array
     {
-        if ($path === '' || !is_readable($path)) {
-            throw new \RuntimeException("SERVER_CONFIG kubeconfig file not readable: {$path}");
+        if ($pathOrYaml === '') {
+            throw new \RuntimeException('SERVER_CONFIG is not set');
         }
 
-        $config = Yaml::parseFile($path);
+        $config = is_readable($pathOrYaml)
+            ? Yaml::parseFile($pathOrYaml)
+            : Yaml::parse($pathOrYaml);
 
         $currentContext = $config['current-context'] ?? null;
         $context = self::findNamed($config['contexts'] ?? [], $currentContext, 'context');

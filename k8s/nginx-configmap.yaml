@@ -1,0 +1,34 @@
+# nginx config for the in-pod sidecar that fronts php-fpm with HTTP (see
+# deployment.yaml) — same logic as docker/nginx.conf used for local dev via
+# docker-compose, except fastcgi_pass targets 127.0.0.1 instead of a Service
+# name: sidecars in the same Pod share a network namespace, so there's no
+# cross-Service DNS hop needed.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ingress-selfservice-nginx-conf
+  namespace: ingress-selfservice
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+
+        root /app/public;
+        index index.php;
+
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+
+        location ~ \.php$ {
+            fastcgi_pass 127.0.0.1:9000;
+            fastcgi_index index.php;
+            fastcgi_param SCRIPT_FILENAME $document_root/index.php;
+            include fastcgi_params;
+        }
+
+        location ~ /\.(?!well-known) {
+            deny all;
+        }
+    }

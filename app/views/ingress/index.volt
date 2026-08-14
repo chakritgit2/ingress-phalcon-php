@@ -1,5 +1,27 @@
 {% extends "layouts/main.volt" %}
 {% block content %}
+{% if currentUser.isDevops() %}
+<div class="mb-4 flex items-center justify-between rounded-lg border {{ botEnabled ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50' }} px-4 py-3">
+    <span class="text-sm font-medium {{ botEnabled ? 'text-green-800' : 'text-red-800' }}">
+        บอทประมวลผลคำขอ:
+        {% if botEnabled %}
+            กำลังทำงาน
+        {% else %}
+            ปิดอยู่ (คำขอใหม่จะค้างจนกว่าจะเปิด)
+        {% endif %}
+    </span>
+    {% if botKillSwitchActive %}
+        <span class="text-xs text-gray-500">ถูกบังคับปิดโดย env var BOT_ENABLED</span>
+    {% else %}
+        <form method="post" action="/ingress/toggle-bot">
+            <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
+            <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition {{ botEnabled ? 'border-red-200 bg-white text-red-700 hover:bg-red-100' : 'border-green-200 bg-white text-green-700 hover:bg-green-100' }}">
+                {% if botEnabled %}ปิดบอท{% else %}เปิดบอท{% endif %}
+            </button>
+        </form>
+    {% endif %}
+</div>
+{% endif %}
 <div class="mb-6 flex items-center justify-between">
     <h1 class="text-2xl font-bold text-gray-900">Ingress ที่เปิดอยู่</h1>
     {% if currentUser.isDevops() %}

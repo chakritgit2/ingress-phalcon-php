@@ -1,8 +1,11 @@
-# NOTE: this container only exposes php-fpm on :9000 (no bundled nginx),
-# mirroring how the sibling hr-advws app was built — that implies an nginx
-# sidecar or shared ingress-controller config already exists for Phalcon
-# apps in this cluster. Confirm with whoever operates it and either add an
-# nginx sidecar container here or point the existing pattern at this Service.
+# The `app` container only speaks FastCGI on :9000 — it needs something in
+# front of it that speaks HTTP, since standard k8s ingress-controllers proxy
+# HTTP to backend Services, not FastCGI. The `nginx` container below is that
+# translator: an in-pod sidecar sharing this Pod's network namespace (reaches
+# php-fpm via 127.0.0.1:9000) and a copy of app/public/ via the `public`
+# emptyDir (populated by the init container, since the nginx:alpine image
+# doesn't have the app's files baked in). Config lives in
+# nginx-configmap.yaml, mirroring docker/nginx.conf used for local dev.
 #
 # Kubernetes API access is via a kubeconfig file mounted from the
 # ingress-selfservice-kubeconfig Secret (see secret.example.yaml), pointed
@@ -27,6 +30,16 @@ spec:
         app: ingress-selfservice
     spec:
       serviceAccountName: ingress-selfservice
+      initContainers:
+        # nginx:alpine has no copy of app/public/ (it's a different image) —
+        # seed the shared emptyDir from this app's own image before nginx
+        # starts, so `root /app/public;` in its config has something to serve.
+        - name: copy-public-assets
+          image: registry.example.com/ingress-selfservice:latest
+          command: ["sh", "-c", "cp -r /app/public/. /shared-public/"]
+          volumeMounts:
+            - name: public
+              mountPath: /shared-public
       containers:
         - name: app
           image: registry.example.com/ingress-selfservice:latest
@@ -44,7 +57,57 @@ spec:
             - name: kubeconfig
               mountPath: /etc/ingress-selfservice
               readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          # No probes here: this container has no HTTP surface (FastCGI on
+          # :9000 only). The nginx container's httpGet probe below already
+          # exercises the full request path (nginx -> fastcgi -> this
+          # container -> app code), which is a truer signal than a bare TCP
+          # check on this container alone would be.
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
+            - name: public
+              mountPath: /app/public
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 64Mi
+          # /login is public (no auth) and cheap, but still exercises
+          # nginx -> fastcgi_pass -> php-fpm -> Volt render end-to-end.
+          readinessProbe:
+            httpGet:
+              path: /login
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /login
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 15
       volumes:
         - name: kubeconfig
           secret:
             secretName: ingress-selfservice-kubeconfig
+        - name: public
+          emptyDir: {}
+        - name: nginx-conf
+          configMap:
+            name: ingress-selfservice-nginx-conf

@@ -53,6 +53,33 @@ class AuthService
         return $user;
     }
 
+    /**
+     * Username/password login, alongside Google SSO. Returns null on any
+     * failure (unknown email, no password set, wrong password, inactive
+     * account) — callers shouldn't distinguish these cases in the UI/audit
+     * log, to avoid leaking which emails exist.
+     */
+    public function attemptLogin(string $email, string $password): ?Users
+    {
+        $user = Users::findFirst([
+            'conditions' => 'email = :email:',
+            'bind' => ['email' => $email],
+        ]);
+
+        if ($user === null || $user->password_hash === null || !$user->is_active) {
+            return null;
+        }
+
+        if (!password_verify($password, $user->password_hash)) {
+            return null;
+        }
+
+        $user->last_login_at = date('Y-m-d H:i:s');
+        $user->save();
+
+        return $user;
+    }
+
     public function login(Users $user): void
     {
         $this->session->set('user_id', $user->id);

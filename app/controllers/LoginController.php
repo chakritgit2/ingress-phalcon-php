@@ -6,11 +6,88 @@ use App\Models\Users;
 
 class LoginController extends ControllerBase
 {
+    private const MAX_LOGIN_ATTEMPTS = 5;
+    private const LOGIN_LOCKOUT_SECONDS = 900; // 15 minutes
+
     public function indexAction()
     {
         if ($this->currentUser() !== null) {
             return $this->response->redirect('/ingress');
         }
+
+        $this->view->setVar('isLocalEnv', getenv('APP_ENV') === 'local');
+    }
+
+    public function loginAction()
+    {
+        if (!$this->request->isPost() || !$this->security->checkToken()) {
+            $this->flash->error('คำขอไม่ถูกต้อง (CSRF)');
+            return $this->response->redirect('/login');
+        }
+
+        $email = trim((string) $this->request->getPost('email', 'string', ''));
+        $password = (string) $this->request->getPost('password', 'string', '');
+
+        if ($email !== '' && $this->isLoginRateLimited($email)) {
+            $this->auditLogService->log('login_rejected', $email, [
+                'detail' => ['reason' => 'rate_limited'],
+            ]);
+            $this->flash->error('พยายามเข้าสู่ระบบผิดหลายครั้งเกินไป กรุณาลองใหม่ภายหลัง');
+            return $this->response->redirect('/login');
+        }
+
+        $user = $email !== '' && $password !== '' ? $this->authService->attemptLogin($email, $password) : null;
+
+        if ($user === null) {
+            if ($email !== '') {
+                $this->registerLoginFailure($email);
+            }
+            $this->auditLogService->log('login_rejected', $email !== '' ? $email : 'unknown', [
+                'detail' => ['reason' => 'invalid_credentials'],
+            ]);
+            $this->flash->error('อีเมลหรือรหัสผ่านไม่ถูกต้อง');
+            return $this->response->redirect('/login');
+        }
+
+        $this->clearLoginFailures($email);
+        $this->authService->login($user);
+
+        $this->auditLogService->log('login', $user->email, [
+            'actor_user_id' => $user->id,
+        ]);
+
+        return $this->response->redirect('/ingress');
+    }
+
+    /**
+     * Keyed by email, not IP — the app sits behind org infra that may proxy
+     * everyone through a shared address, and this only needs to stop
+     * credential-guessing against one account, not rate-limit a source IP.
+     * Backed by the same disk cache as everything else in `$di->get('cache')`
+     * (see app/config/services.php); fine for the current single-replica
+     * deployment, but won't be shared across pods if this ever scales out.
+     */
+    private function loginAttemptsCacheKey(string $email): string
+    {
+        return 'login_attempts_' . md5(strtolower($email));
+    }
+
+    private function isLoginRateLimited(string $email): bool
+    {
+        $count = (int) ($this->cache->get($this->loginAttemptsCacheKey($email)) ?? 0);
+        return $count >= self::MAX_LOGIN_ATTEMPTS;
+    }
+
+    private function registerLoginFailure(string $email): void
+    {
+        $key = $this->loginAttemptsCacheKey($email);
+        $count = (int) ($this->cache->get($key) ?? 0);
+        $this->cache->set($key, $count + 1, self::LOGIN_LOCKOUT_SECONDS);
+    }
+
+    private function clearLoginFailures(string $email): void
+    {
+        $this->cache->delete($this->loginAttemptsCacheKey($email));
     }
 
     /**
