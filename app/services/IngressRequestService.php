@@ -7,9 +7,10 @@ use App\Models\K8sCommands;
 use App\Models\Users;
 
 /**
- * Only enqueues intent — never calls the Kubernetes API itself. Every
- * mutating action (create/delete) is recorded as a `k8s_commands` row with
- * status='pending'; KubernetesTask::processCommandsAction() (run on a
+ * Only enqueues intent — never calls the Kubernetes API itself (the
+ * preview*Payload() calls made here are pure local computation, no HTTP).
+ * Every mutating action (create/delete) is recorded as a `k8s_commands` row
+ * with status='pending'; KubernetesTask::processCommandsAction() (run on a
  * schedule, see k8s/cronjob.yaml) is the only thing that actually talks to
  * Kubernetes and writes the audit log, so a crashed/timed-out web request
  * can never leave a real cluster change with no trace of it.
@@ -18,13 +19,22 @@ class IngressRequestService
 {
     private const MAX_SCHEDULE_MINUTES = 10080; // 7 days
 
+    // Same DNS-1123 subdomain format Kubernetes validates Ingress hosts
+    // against (see KubernetesService::DNS_1123_SUBDOMAIN) — duplicated here
+    // so create() can reject a malformed host with a clear Thai message
+    // synchronously, instead of it only surfacing later as a silently
+    // logged preview-build failure or a bot-processing error.
+    private const DNS_1123_SUBDOMAIN = '/^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/';
+
     private string $nodeIp;
     private AuditLogService $auditLogService;
+    private KubernetesServiceInterface $kubernetesService;
 
-    public function __construct(string $nodeIp, AuditLogService $auditLogService)
+    public function __construct(string $nodeIp, AuditLogService $auditLogService, KubernetesServiceInterface $kubernetesService)
     {
         $this->nodeIp = $nodeIp;
         $this->auditLogService = $auditLogService;
+        $this->kubernetesService = $kubernetesService;
     }
 
     /**
@@ -56,6 +66,9 @@ class IngressRequestService
         if ($requestType === 'ingress') {
             if ($host === '') {
                 throw new \InvalidArgumentException('กรุณาระบุ Host (โดเมน)');
+            }
+            if (!preg_match(self::DNS_1123_SUBDOMAIN, $host) || strlen($host) > 253) {
+                throw new \InvalidArgumentException('รูปแบบ Host ไม่ถูกต้อง — ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)');
             }
             if ($secretName === '') {
                 throw new \InvalidArgumentException('กรุณาเลือก Secret Name (TLS)');
@@ -146,6 +159,34 @@ class IngressRequestService
             )));
         }
 
+        // Best-effort preview so request_payload isn't blank until the bot's
+        // next tick — for `create` this can't include the live Deployment
+        // selector (only resolvable via a real Kubernetes call), so it's
+        // just a draft. KubernetesTask::processCommandsAction() overwrites
+        // this with the real getRequestLog() once it actually processes
+        // the command. Must never block enqueue itself on failure.
+        try {
+            $preview = $this->buildPreviewPayload($row, $action);
+            $command->request_payload = json_encode($preview);
+            $command->payload_source = 'preview';
+            $command->save();
+        } catch (\Throwable $e) {
+            // leave request_payload/payload_source null — same as before this
+            // existed. Logged so a bad value (e.g. a Host field that isn't a
+            // bare hostname) is visible on the /audit/{id} Trail instead of
+            // silently vanishing — this is the same validation
+            // createNodePortService()/createIngress() will hit later when
+            // the bot actually processes the command, so it would have
+            // failed then anyway; this just surfaces it earlier too.
+            $this->auditLogService->log('preview_payload_failed', AuditLogService::actorLabelFor($user), [
+                'ingress_request_id' => $row->id,
+                'actor_user_id' => $user->id,
+                'namespace' => $row->namespace,
+                'deployment_name' => $row->deployment_name,
+                'detail' => ['action' => $action, 'error' => $e->getMessage()],
+            ]);
+        }
+
         // Logged at request time (not just once KubernetesTask actually
         // processes it) so there's a trail of who asked for what even
         // before — or if — the background worker ever picks it up.
@@ -164,5 +205,42 @@ class IngressRequestService
                 'target_port' => $row->target_port,
             ],
         ]);
+    }
+
+    /**
+     * No HTTP calls — builds from data already sitting on $row. For
+     * `create`, service_name/ingress_name aren't known yet (only assigned
+     * once the bot's create call returns), so this is necessarily a partial
+     * draft. For `delete`, $row already has everything (service_name/
+     * ingress_name were filled in by the earlier create), so this matches
+     * exactly what will actually be sent.
+     */
+    private function buildPreviewPayload(IngressRequests $row, string $action): array
+    {
+        if ($action === 'create') {
+            if ($row->request_type === 'ingress') {
+                return $this->kubernetesService->previewCreateIngressPayload(
+                    $row->namespace,
+                    $row->deployment_name,
+                    $row->target_port,
+                    $row->host,
+                    $row->secret_name,
+                    $row->id
+                );
+            }
+
+            return $this->kubernetesService->previewCreateNodePortServicePayload(
+                $row->namespace,
+                $row->deployment_name,
+                $row->target_port,
+                $row->id
+            );
+        }
+
+        if ($row->request_type === 'ingress') {
+            return $this->kubernetesService->previewDeleteIngressPayload($row->namespace, $row->ingress_name, $row->service_name);
+        }
+
+        return $this->kubernetesService->previewDeleteServicePayload($row->namespace, $row->service_name);
     }
 }

@@ -46,6 +46,8 @@ class KubernetesTask extends Task
             $actorLabel = $command->requestedBy->email ?? 'system:unknown';
 
             try {
+                $this->kubernetesService->resetRequestLog();
+
                 if ($command->action === 'create') {
                     if ($row->request_type === 'ingress') {
                         $created = $this->kubernetesService->createIngress(
@@ -142,11 +144,23 @@ class KubernetesTask extends Task
                 // guard that crashes the whole batch instead of just
                 // marking this one command failed.
                 try {
-                    $lastRequest = $this->kubernetesService->getLastRequest();
+                    $requestLog = $this->kubernetesService->getRequestLog();
                 } catch (\Throwable $e) {
-                    $lastRequest = null;
+                    $requestLog = [];
                 }
-                $command->request_payload = $lastRequest !== null ? json_encode($lastRequest) : null;
+                if (!empty($requestLog)) {
+                    // Overwrites whatever preview IngressRequestService::enqueue()
+                    // stored at request time (see its docblock) with the
+                    // literal request(s) actually sent — an ingress-type
+                    // create/delete sends two (Service + Ingress), a
+                    // nodeport-type one sends one.
+                    $command->request_payload = json_encode($requestLog, JSON_PRETTY_PRINT);
+                    $command->payload_source = 'sent';
+                }
+                // else: nothing was actually sent (e.g. Deployment lookup
+                // failed before a body was ever built) — leave
+                // request_payload/payload_source as whatever enqueue()
+                // already set (a preview, or null if that failed too).
             }
 
             $command->processed_at = date('Y-m-d H:i:s');

@@ -44,10 +44,58 @@ interface KubernetesServiceInterface
     public function deleteIngress(string $namespace, string $ingressName, string $serviceName): void;
 
     /**
-     * The method/path/body of the most recent create/delete call attempted,
-     * regardless of whether it succeeded — null if nothing has been sent
-     * yet. Used by KubernetesTask to log the literal command sent to
-     * Kubernetes alongside its outcome.
+     * Every mutating create/delete request attempted since the last
+     * resetRequestLog() call, in call order — [] if nothing has been sent
+     * yet. Used by KubernetesTask to log the literal command(s) sent to
+     * Kubernetes alongside the outcome. A single action can involve more
+     * than one entry (e.g. createIngress()/deleteIngress() each make a
+     * Service call and an Ingress call).
      */
-    public function getLastRequest(): ?array;
+    public function getRequestLog(): array;
+
+    /**
+     * Clears the request log. KubernetesTask calls this before processing
+     * each k8s_commands row so getRequestLog() afterward reflects only that
+     * row's own call(s), not a previous command's in the same batch.
+     */
+    public function resetRequestLog(): void;
+
+    /**
+     * Builds the {method, path, body} of the Service create request WITHOUT
+     * sending it — no HTTP calls — wrapped in a 1-element array for shape
+     * consistency with previewCreateIngressPayload(). Used by
+     * IngressRequestService to store a preview in
+     * k8s_commands.request_payload at enqueue time, before the bot ever
+     * runs. Since the real body needs the target Deployment's live
+     * selector (only knowable via a real Kubernetes call), `body.spec.selector`
+     * is always `null` here — a placeholder until KubernetesTask actually
+     * processes the command and overwrites request_payload with the real,
+     * fully-resolved request.
+     */
+    public function previewCreateNodePortServicePayload(string $namespace, string $deploymentName, int $targetPort, int $requestId): array;
+
+    /**
+     * Same idea as previewCreateNodePortServicePayload(), but for the
+     * Ingress create path. Returns a 2-element array in real call order:
+     * [0] the backing Service create request, [1] the Ingress create
+     * request.
+     */
+    public function previewCreateIngressPayload(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId): array;
+
+    /**
+     * Builds the {method, path, body} of the Service delete request WITHOUT
+     * sending it, wrapped in a 1-element array. Unlike the create previews,
+     * this is exact — a delete needs no data beyond what's already on the
+     * ingress_requests row, so this always matches what deleteService()
+     * will actually send.
+     */
+    public function previewDeleteServicePayload(string $namespace, string $name): array;
+
+    /**
+     * Same idea as previewDeleteServicePayload(), but for the Ingress
+     * delete path. Returns a 2-element array in real call order: [0] the
+     * Ingress delete request, [1] the Service delete request that
+     * deleteIngress() always issues afterward.
+     */
+    public function previewDeleteIngressPayload(string $namespace, string $ingressName, string $serviceName): array;
 }

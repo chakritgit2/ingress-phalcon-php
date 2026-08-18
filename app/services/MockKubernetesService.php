@@ -10,7 +10,7 @@ namespace App\Services;
  */
 class MockKubernetesService implements KubernetesServiceInterface
 {
-    private ?array $lastRequest = null;
+    private array $requestLog = [];
 
     private const NAMESPACES = ['qa', 'staging', 'production'];
 
@@ -65,7 +65,7 @@ class MockKubernetesService implements KubernetesServiceInterface
         // detect a duplicate across separate CLI invocations (no persistent
         // state) — $requestId is only threaded through for interface
         // parity and to show up in the logged payload.
-        $this->lastRequest = [
+        $this->requestLog[] = [
             'method' => 'POST',
             'path' => "/api/v1/namespaces/{$namespace}/services",
             'body' => [
@@ -101,7 +101,7 @@ class MockKubernetesService implements KubernetesServiceInterface
 
     public function deleteService(string $namespace, string $name): void
     {
-        $this->lastRequest = [
+        $this->requestLog[] = [
             'method' => 'DELETE',
             'path' => "/api/v1/namespaces/{$namespace}/services/{$name}",
             'body' => null,
@@ -123,7 +123,34 @@ class MockKubernetesService implements KubernetesServiceInterface
         $serviceName = "tmp-ingress-svc-{$suffix}";
         $ingressName = "tmp-ingress-{$suffix}";
 
-        $this->lastRequest = [
+        $labels = [
+            'app.kubernetes.io/managed-by' => 'ingress-selfservice',
+            'advws-group' => 'company',
+            'k8s-app' => $deploymentName,
+            'ingress-selfservice.advws.com/request-id' => (string) $requestId,
+        ];
+
+        // Mirrors the real KubernetesService::createIngress(), which always
+        // POSTs a backing ClusterIP Service before the Ingress itself — the
+        // mock has no persistent state to actually create one, but the log
+        // still needs to reflect both calls for the audit trail to be
+        // representative of the real flow.
+        $this->requestLog[] = [
+            'method' => 'POST',
+            'path' => "/api/v1/namespaces/{$namespace}/services",
+            'body' => [
+                'apiVersion' => 'v1',
+                'kind' => 'Service',
+                'metadata' => [
+                    'generateName' => 'tmp-ingress-svc-',
+                    'namespace' => $namespace,
+                    'labels' => $labels,
+                ],
+                'spec' => ['type' => 'ClusterIP', 'ports' => [['port' => $targetPort, 'targetPort' => $targetPort]]],
+            ],
+        ];
+
+        $this->requestLog[] = [
             'method' => 'POST',
             'path' => "/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses",
             'body' => [
@@ -132,12 +159,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                 'metadata' => [
                     'generateName' => 'tmp-ingress-',
                     'namespace' => $namespace,
-                    'labels' => [
-                        'app.kubernetes.io/managed-by' => 'ingress-selfservice',
-                        'advws-group' => 'company',
-                        'k8s-app' => $deploymentName,
-                        'ingress-selfservice.advws.com/request-id' => (string) $requestId,
-                    ],
+                    'labels' => $labels,
                     'annotations' => ['kubernetes.io/ingress.class' => 'nginx'],
                 ],
                 'spec' => [
@@ -170,16 +192,132 @@ class MockKubernetesService implements KubernetesServiceInterface
 
     public function deleteIngress(string $namespace, string $ingressName, string $serviceName): void
     {
-        $this->lastRequest = [
+        // Mirrors the real KubernetesService::deleteIngress(), which
+        // deletes the Ingress first and then always cascades into
+        // deleteService() for its backing Service.
+        $this->requestLog[] = [
             'method' => 'DELETE',
             'path' => "/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses/{$ingressName}",
+            'body' => null,
+        ];
+        $this->requestLog[] = [
+            'method' => 'DELETE',
+            'path' => "/api/v1/namespaces/{$namespace}/services/{$serviceName}",
             'body' => null,
         ];
         // No-op: nothing real to delete.
     }
 
-    public function getLastRequest(): ?array
+    public function getRequestLog(): array
     {
-        return $this->lastRequest;
+        return $this->requestLog;
+    }
+
+    public function resetRequestLog(): void
+    {
+        $this->requestLog = [];
+    }
+
+    public function previewCreateNodePortServicePayload(string $namespace, string $deploymentName, int $targetPort, int $requestId): array
+    {
+        return [[
+            'method' => 'POST',
+            'path' => "/api/v1/namespaces/{$namespace}/services",
+            'body' => [
+                'apiVersion' => 'v1',
+                'kind' => 'Service',
+                'metadata' => [
+                    'generateName' => 'tmp-nodeport-',
+                    'namespace' => $namespace,
+                    'labels' => [
+                        'app.kubernetes.io/managed-by' => 'ingress-selfservice',
+                        'advws-group' => 'company',
+                        'k8s-app' => $deploymentName,
+                        'ingress-selfservice.advws.com/request-id' => (string) $requestId,
+                    ],
+                ],
+                'spec' => ['type' => 'NodePort', 'selector' => null, 'ports' => [['port' => $targetPort, 'targetPort' => $targetPort]]],
+            ],
+        ]];
+    }
+
+    public function previewCreateIngressPayload(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId): array
+    {
+        $labels = [
+            'app.kubernetes.io/managed-by' => 'ingress-selfservice',
+            'advws-group' => 'company',
+            'k8s-app' => $deploymentName,
+            'ingress-selfservice.advws.com/request-id' => (string) $requestId,
+        ];
+
+        $servicePreview = [
+            'method' => 'POST',
+            'path' => "/api/v1/namespaces/{$namespace}/services",
+            'body' => [
+                'apiVersion' => 'v1',
+                'kind' => 'Service',
+                'metadata' => [
+                    'generateName' => 'tmp-ingress-svc-',
+                    'namespace' => $namespace,
+                    'labels' => $labels,
+                ],
+                'spec' => ['type' => 'ClusterIP', 'selector' => null, 'ports' => [['port' => $targetPort, 'targetPort' => $targetPort]]],
+            ],
+        ];
+
+        $placeholderServiceName = 'nodered-' . substr(bin2hex(random_bytes(3)), 0, 6);
+
+        $ingressPreview = [
+            'method' => 'POST',
+            'path' => "/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses",
+            'body' => [
+                'apiVersion' => 'networking.k8s.io/v1',
+                'kind' => 'Ingress',
+                'metadata' => [
+                    'generateName' => 'tmp-ingress-',
+                    'namespace' => $namespace,
+                    'labels' => $labels,
+                    'annotations' => ['kubernetes.io/ingress.class' => 'nginx'],
+                ],
+                'spec' => [
+                    'rules' => [[
+                        'host' => $host,
+                        'http' => ['paths' => [[
+                            'path' => '/',
+                            'pathType' => 'ImplementationSpecific',
+                            'backend' => ['service' => ['name' => $placeholderServiceName, 'port' => ['number' => $targetPort]]],
+                        ]]],
+                    ]],
+                    'tls' => [['hosts' => [$host], 'secretName' => $secretName]],
+                ],
+            ],
+        ];
+
+        return [$servicePreview, $ingressPreview];
+    }
+
+    public function previewDeleteServicePayload(string $namespace, string $name): array
+    {
+        return [[
+            'method' => 'DELETE',
+            'path' => "/api/v1/namespaces/{$namespace}/services/{$name}",
+            'body' => null,
+        ]];
+    }
+
+    public function previewDeleteIngressPayload(string $namespace, string $ingressName, string $serviceName): array
+    {
+        return [
+            [
+                'method' => 'DELETE',
+                'path' => "/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses/{$ingressName}",
+                'body' => null,
+            ],
+            [
+                'method' => 'DELETE',
+                'path' => "/api/v1/namespaces/{$namespace}/services/{$serviceName}",
+                'body' => null,
+            ],
+        ];
     }
 }

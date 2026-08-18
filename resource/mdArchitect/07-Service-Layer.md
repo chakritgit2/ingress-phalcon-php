@@ -106,7 +106,7 @@ Kubernetes *resources*, not just HTTP:
 | `getDeployment(string $namespace, string $name): ?array` | Full object, null on 404 |
 | `createNodePortService($namespace, $deploymentName, $targetPort, $requestId): array` | The core mutating operation, idempotency-guarded on `$requestId` — see [../mdSource/Kubernetes-Integration.md](../mdSource/Kubernetes-Integration.md) |
 | `deleteService(string $namespace, string $name): void` | Idempotent — treats "not found" as success |
-| `getLastRequest(): ?array` | The `{method, path, body}` of the most recent attempt, for logging into `k8s_commands.request_payload` |
+| `getRequestLog(): array` | Every mutating (`POST`/`DELETE`) request attempted since the last `resetRequestLog()`, in call order, for logging into `k8s_commands.request_payload` — a single create/delete action can produce more than one entry (e.g. `createIngress()`/`deleteIngress()` each involve a Service call and an Ingress call) |
 
 Only `KubernetesTask` calls the two mutating methods now — see
 `IngressRequestService` below.

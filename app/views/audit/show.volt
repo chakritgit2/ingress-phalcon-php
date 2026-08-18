@@ -78,7 +78,14 @@
                 <td class="px-4 py-3 text-gray-700">{{ c.action }}</td>
                 <td class="px-4 py-3">{% include "partials/badge" with ["status": c.status] %}</td>
                 <td class="px-4 py-3 font-mono text-xs text-gray-600">
-                    {% if c.request_payload %}<pre class="whitespace-pre-wrap break-all">{{ c.request_payload }}</pre>{% else %}<span class="text-gray-400">-</span>{% endif %}
+                    {% if c.request_payload %}
+                    {% if c.payload_source == 'preview' %}
+                    <span class="mb-1 inline-flex items-center gap-1.5 rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700"><span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>แผน (ยังไม่ส่ง)</span>
+                    {% elseif c.payload_source == 'sent' %}
+                    <span class="mb-1 inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>ส่งจริง</span>
+                    {% endif %}
+                    <pre class="whitespace-pre-wrap break-all">{{ c.request_payload }}</pre>
+                    {% else %}<span class="text-gray-400">-</span>{% endif %}
                 </td>
                 <td class="px-4 py-3 font-mono text-xs text-gray-600">
                     {% if c.error_message %}<span class="text-red-700">{{ c.error_message }}</span>
