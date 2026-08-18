@@ -5,7 +5,7 @@ use App\Services\AuditLogService;
 use App\Services\AuthService;
 use App\Services\GoogleAuthService;
 use App\Services\IngressRequestService;
-use App\Services\KubeconfigLoader;
+use App\Services\K8sConfigResolver;
 use App\Services\KubernetesClient;
 use App\Services\KubernetesService;
 use App\Services\MockKubernetesService;
@@ -142,11 +142,13 @@ $di->setShared('dispatcher', function () {
 
 // --- Kubernetes -------------------------------------------------------
 
-// SERVER_CONFIG points at a standard kubeconfig file (in-cluster: mounted
-// from a Secret; local dev: a developer's own kubeconfig). See
-// App\Services\KubeconfigLoader and resource/mdSource/Kubernetes-Integration.md.
+// In-cluster, credentials come from the Pod's own auto-mounted
+// ServiceAccount token — no SERVER_CONFIG needed there. Outside a cluster
+// (local dev, CLI), SERVER_CONFIG points at a standard kubeconfig file. See
+// App\Services\K8sConfigResolver / KubeconfigLoader and
+// resource/mdSource/Kubernetes-Integration.md.
 $di->setShared('kubernetesClient', function () use ($config) {
-    $kubeconfig = KubeconfigLoader::load($config->kubernetes->server_config_path);
+    $kubeconfig = K8sConfigResolver::resolve($config->kubernetes->server_config_path);
 
     return new KubernetesClient(
         $kubeconfig['host'],
@@ -156,11 +158,14 @@ $di->setShared('kubernetesClient', function () use ($config) {
     );
 });
 
-// DEV-ONLY: when APP_ENV=local and no SERVER_CONFIG is set, fall back to
-// MockKubernetesService so the create-ingress flow can be previewed without
-// a reachable cluster. Never takes effect once SERVER_CONFIG is configured.
+// A real Pod always has its own ServiceAccount token mounted (see
+// K8sConfigResolver) — that takes priority unconditionally, so a stray
+// APP_ENV=local on an actual in-cluster deployment can no longer make it
+// fall back to mock data. DEV-ONLY: outside a cluster, when APP_ENV=local
+// and no SERVER_CONFIG is set, fall back to MockKubernetesService so the
+// create-ingress flow can be previewed without a reachable cluster.
 $di->setShared('kubernetesService', function () use ($config) {
-    if (getenv('APP_ENV') === 'local' && $config->kubernetes->server_config_path === '') {
+    if (!K8sConfigResolver::isInCluster() && getenv('APP_ENV') === 'local' && $config->kubernetes->server_config_path === '') {
         return new MockKubernetesService();
     }
 
