@@ -36,7 +36,7 @@ full design/decision record.
 
 | Var | Purpose |
 |---|---|
-| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | MySQL connection |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` | MySQL connection |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Google OAuth app credentials |
 | `GOOGLE_HD` | Allowed Google Workspace hosted domain (default `advws.com`) |
 | `COOKIE_SIGN_KEY` | Session/cookie signing secret |

@@ -46,7 +46,7 @@ return new Config([
         'host'       => getenv('DB_HOST') ?: 'localhost',
         'port'       => (int) (getenv('DB_PORT') ?: 3306),
         'username'   => getenv('DB_USER') ?: '',
-        'password'   => getenv('DB_PASSWORD') ?: '',
+        'password'   => getenv('DB_PASS') ?: '',
         'dbname'     => getenv('DB_NAME') ?: '',
         'charset'    => 'utf8mb4',
     ],

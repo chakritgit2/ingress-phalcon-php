@@ -16,7 +16,7 @@ the full key list; grouped by concern:
 
 | Group | Keys |
 |---|---|
-| Database | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` |
+| Database | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` |
 | Google OAuth | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`, `GOOGLE_HD` |
 | Session/cookies | `COOKIE_SIGN_KEY` |
 | Kubernetes | `K8S_NODE_IP` (display/log address), `SERVER_CONFIG` (path to a kubeconfig file — see below) |
