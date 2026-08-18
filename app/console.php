@@ -1,7 +1,7 @@
 <?php
 
 use App\Services\AuditLogService;
-use App\Services\KubeconfigLoader;
+use App\Services\K8sConfigResolver;
 use App\Services\KubernetesClient;
 use App\Services\KubernetesService;
 use App\Services\MockKubernetesService;
@@ -43,16 +43,17 @@ $di->setShared('db', function () use ($config) {
 });
 
 $di->setShared('kubernetesClient', function () use ($config) {
-    $kubeconfig = KubeconfigLoader::load($config->kubernetes->server_config_path);
+    $kubeconfig = K8sConfigResolver::resolve($config->kubernetes->server_config_path);
     return new KubernetesClient($kubeconfig['host'], $kubeconfig['port'], $kubeconfig['token'], $kubeconfig['ca_path']);
 });
 
-// DEV-ONLY: mirrors the same fallback in app/config/services.php so the
-// bot (processCommands/pruneExpired) is testable in the docker-compose
-// mockup without a reachable cluster. Never takes effect once SERVER_CONFIG
-// is configured.
+// Mirrors the same logic in app/config/services.php: in-cluster (the
+// CronJob pod) always uses its own ServiceAccount token via
+// K8sConfigResolver, regardless of APP_ENV. DEV-ONLY: outside a cluster with
+// no SERVER_CONFIG, fall back to MockKubernetesService so the bot
+// (processCommands/pruneExpired) is testable in the docker-compose mockup.
 $di->setShared('kubernetesService', function () use ($config) {
-    if (getenv('APP_ENV') === 'local' && $config->kubernetes->server_config_path === '') {
+    if (!K8sConfigResolver::isInCluster() && getenv('APP_ENV') === 'local' && $config->kubernetes->server_config_path === '') {
         return new MockKubernetesService();
     }
 
