@@ -1,56 +1,36 @@
 <?php
-declare(strict_types=1);
 
-use Phalcon\Di\FactoryDefault;
+use Phalcon\Mvc\Application;
 
 error_reporting(E_ALL);
-
 //show errors
 ini_set('display_errors', '1');
-
-define('BASE_PATH', dirname(__DIR__));
-define('APP_PATH', BASE_PATH . '/app');
-
-require_once BASE_PATH . '/vendor/autoload.php';
+require dirname(__DIR__) . '/vendor/autoload.php';
 
 try {
+    /** @var \Phalcon\Config\Config $config */
+    $config = require dirname(__DIR__) . '/app/config/config.php';
 
-    /**
-     * The FactoryDefault Dependency Injector automatically registers
-     * the services that provide a full stack framework.
-     */
-    $di = new FactoryDefault();
+    /** @var \Phalcon\Di\FactoryDefault $di */
+    $di = require dirname(__DIR__) . '/app/config/services.php';
 
-    /**
-     * Read services
-     */
-    include APP_PATH . '/config/services.php';
+    require dirname(__DIR__) . '/app/config/loader.php';
 
-    /**
-     * Handle routes
-     */
-    include APP_PATH . '/config/router.php';
+    $di->setShared('router', fn () => require dirname(__DIR__) . '/app/config/router.php');
 
-    /**
-     * Get config service for use in inline setup below
-     */
-    $config = $di->getConfig();
-
-    /**
-     * Include Autoloader
-     */
-    include APP_PATH . '/config/loader.php';
-
-    /**
-     * Handle the request
-     */
-    $application = new \Phalcon\Mvc\Application($di);
+    $application = new Application($di);
 
     echo $application->handle($_SERVER['REQUEST_URI'])->getContent();
-
-} catch (\Exception $e) {
-
-    echo $e->getMessage() . '<br>';
-    echo '<pre>' . $e->getTraceAsString() . '</pre>';
-
+} catch (\Throwable $e) {
+    $errorId = substr(bin2hex(random_bytes(4)), 0, 8);
+    error_log(sprintf(
+        "[%s] %s %s: %s\n%s",
+        $errorId,
+        $_SERVER['REQUEST_METHOD'] ?? '-',
+        $_SERVER['REQUEST_URI'] ?? '-',
+        $e->getMessage(),
+        $e->getTraceAsString()
+    ));
+    http_response_code(500);
+    echo "Internal Server Error (ref: {$errorId})";
 }
