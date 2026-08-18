@@ -98,24 +98,7 @@ class KubernetesService implements KubernetesServiceInterface
             throw new KubernetesApiException("Deployment {$deploymentName} has no matchLabels selector to target");
         }
 
-        $body = [
-            'apiVersion' => 'v1',
-            'kind' => 'Service',
-            'metadata' => [
-                'generateName' => 'tmp-nodeport-',
-                'namespace' => $namespace,
-                'labels' => $this->buildManagedLabels($deploymentName, $requestId),
-            ],
-            'spec' => [
-                'type' => 'NodePort',
-                'selector' => $selector,
-                'ports' => [[
-                    'port' => $targetPort,
-                    'targetPort' => $targetPort,
-                    'protocol' => 'TCP',
-                ]],
-            ],
-        ];
+        $body = $this->buildServiceBody($namespace, $deploymentName, $targetPort, $requestId, $selector, 'tmp-nodeport-', 'NodePort');
 
         $created = $this->client->post("/api/v1/namespaces/{$namespace}/services", $body);
 
@@ -160,29 +143,68 @@ class KubernetesService implements KubernetesServiceInterface
         if ($existingService !== null) {
             $serviceName = $existingService['service_name'];
         } else {
-            $serviceBody = [
-                'apiVersion' => 'v1',
-                'kind' => 'Service',
-                'metadata' => [
-                    'generateName' => 'tmp-ingress-svc-',
-                    'namespace' => $namespace,
-                    'labels' => $labels,
-                ],
-                'spec' => [
-                    'type' => 'ClusterIP',
-                    'selector' => $selector,
-                    'ports' => [[
-                        'port' => $targetPort,
-                        'targetPort' => $targetPort,
-                        'protocol' => 'TCP',
-                    ]],
-                ],
-            ];
+            $serviceBody = $this->buildServiceBody($namespace, $deploymentName, $targetPort, $requestId, $selector, 'tmp-ingress-svc-', 'ClusterIP');
             $createdService = $this->client->post("/api/v1/namespaces/{$namespace}/services", $serviceBody);
             $serviceName = $createdService['metadata']['name'];
         }
 
-        $ingressBody = [
+        $ingressBody = $this->buildIngressBody($namespace, $host, $secretName, $serviceName, $targetPort, $labels);
+
+        $createdIngress = $this->client->post("/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses", $ingressBody);
+
+        return [
+            'service_name' => $serviceName,
+            'ingress_name' => $createdIngress['metadata']['name'],
+            'k8s_uid' => $createdIngress['metadata']['uid'],
+        ];
+    }
+
+    private function buildManagedLabels(string $deploymentName, int $requestId): array
+    {
+        return [
+            'app.kubernetes.io/managed-by' => 'ingress-selfservice',
+            'advws-group' => 'company',
+            'k8s-app' => $deploymentName,
+            self::REQUEST_ID_LABEL => (string) $requestId,
+        ];
+    }
+
+    /**
+     * Shared by createNodePortService(), createIngress()'s backing Service,
+     * and the preview*Payload() methods below. $selector is nullable so a
+     * preview (built with no live Deployment lookup) can represent "not yet
+     * resolved" as an explicit `null` rather than guessing at a value.
+     */
+    private function buildServiceBody(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?array $selector, string $generateNamePrefix, string $serviceType): array
+    {
+        return [
+            'apiVersion' => 'v1',
+            'kind' => 'Service',
+            'metadata' => [
+                'generateName' => $generateNamePrefix,
+                'namespace' => $namespace,
+                'labels' => $this->buildManagedLabels($deploymentName, $requestId),
+            ],
+            'spec' => [
+                'type' => $serviceType,
+                'selector' => $selector,
+                'ports' => [[
+                    'port' => $targetPort,
+                    'targetPort' => $targetPort,
+                    'protocol' => 'TCP',
+                ]],
+            ],
+        ];
+    }
+
+    /**
+     * Shared by createIngress() and previewCreateIngressPayload(). $serviceName
+     * is nullable so a preview (built before the idempotency lookup/service
+     * create has happened) can represent "not yet resolved" explicitly.
+     */
+    private function buildIngressBody(string $namespace, string $host, string $secretName, ?string $serviceName, int $targetPort, array $labels): array
+    {
+        return [
             'apiVersion' => 'networking.k8s.io/v1',
             'kind' => 'Ingress',
             'metadata' => [
@@ -215,23 +237,84 @@ class KubernetesService implements KubernetesServiceInterface
                 ]],
             ],
         ];
-
-        $createdIngress = $this->client->post("/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses", $ingressBody);
-
-        return [
-            'service_name' => $serviceName,
-            'ingress_name' => $createdIngress['metadata']['name'],
-            'k8s_uid' => $createdIngress['metadata']['uid'],
-        ];
     }
 
-    private function buildManagedLabels(string $deploymentName, int $requestId): array
+    public function previewCreateNodePortServicePayload(string $namespace, string $deploymentName, int $targetPort, int $requestId): array
     {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
+        $targetPort = $this->assertValidPort($targetPort);
+
+        return [[
+            'method' => 'POST',
+            'path' => "/api/v1/namespaces/{$namespace}/services",
+            'body' => $this->buildServiceBody($namespace, $deploymentName, $targetPort, $requestId, null, 'tmp-nodeport-', 'NodePort'),
+        ]];
+    }
+
+    public function previewCreateIngressPayload(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
+        $targetPort = $this->assertValidPort($targetPort);
+        $host = $this->assertValidHost($host);
+        $secretName = $this->assertValidSubdomain($secretName, 'secret name');
+
+        $labels = $this->buildManagedLabels($deploymentName, $requestId);
+
+        $servicePreview = [
+            'method' => 'POST',
+            'path' => "/api/v1/namespaces/{$namespace}/services",
+            'body' => $this->buildServiceBody($namespace, $deploymentName, $targetPort, $requestId, null, 'tmp-ingress-svc-', 'ClusterIP'),
+        ];
+
+        // The real backing Service's name only exists once Kubernetes
+        // actually assigns it (createIngress()'s generateName, or an
+        // existing one found via the idempotency check) — neither is
+        // knowable here without a live call. A locally-generated random
+        // placeholder just avoids a bare `null` in the preview; it will
+        // almost certainly NOT match the real name, and gets overwritten
+        // like the rest of this payload once the bot actually sends it.
+        $placeholderServiceName = 'nodered-' . substr(bin2hex(random_bytes(3)), 0, 6);
+
+        $ingressPreview = [
+            'method' => 'POST',
+            'path' => "/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses",
+            'body' => $this->buildIngressBody($namespace, $host, $secretName, $placeholderServiceName, $targetPort, $labels),
+        ];
+
+        return [$servicePreview, $ingressPreview];
+    }
+
+    public function previewDeleteServicePayload(string $namespace, string $name): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $name = $this->assertValidLabel($name, 'service name');
+
+        return [[
+            'method' => 'DELETE',
+            'path' => "/api/v1/namespaces/{$namespace}/services/{$name}",
+            'body' => null,
+        ]];
+    }
+
+    public function previewDeleteIngressPayload(string $namespace, string $ingressName, string $serviceName): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $ingressName = $this->assertValidLabel($ingressName, 'ingress name');
+        $serviceName = $this->assertValidLabel($serviceName, 'service name');
+
         return [
-            'app.kubernetes.io/managed-by' => 'ingress-selfservice',
-            'advws-group' => 'company',
-            'k8s-app' => $deploymentName,
-            self::REQUEST_ID_LABEL => (string) $requestId,
+            [
+                'method' => 'DELETE',
+                'path' => "/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses/{$ingressName}",
+                'body' => null,
+            ],
+            [
+                'method' => 'DELETE',
+                'path' => "/api/v1/namespaces/{$namespace}/services/{$serviceName}",
+                'body' => null,
+            ],
         ];
     }
 
@@ -309,9 +392,14 @@ class KubernetesService implements KubernetesServiceInterface
         $this->deleteService($namespace, $serviceName);
     }
 
-    public function getLastRequest(): ?array
+    public function getRequestLog(): array
     {
-        return $this->client->getLastRequest();
+        return $this->client->getRequestLog();
+    }
+
+    public function resetRequestLog(): void
+    {
+        $this->client->resetRequestLog();
     }
 
     private function assertValidLabel(string $value, string $field): string

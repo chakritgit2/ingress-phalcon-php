@@ -84,12 +84,31 @@ visible in `KubernetesService`.
 - `deleteService($namespace, $name)` — used by the command processor (manual
   delete) and the expiry sweeper; treats "already gone" as success rather
   than an error, since the sweeper may race with a manual delete.
-- `getLastRequest(): ?array` — returns the `{method, path, body}` of the
-  most recent request this instance attempted, recorded *before* the HTTP
-  call so it's populated even when that call then throws. `KubernetesTask`
-  reads this after every create/delete attempt to persist the literal
-  outbound command into `k8s_commands.request_payload` — see
+- `getRequestLog(): array` / `resetRequestLog(): void` — `getRequestLog()`
+  returns every mutating (`POST`/`DELETE`) request this instance has
+  attempted since the last reset, in call order, recorded *before* each
+  HTTP call so an entry is present even when that call then throws.
+  Read-only `GET`s (idempotency checks, Deployment lookups) are never
+  recorded. `createIngress()`/`deleteIngress()` each issue two mutating
+  calls (a Service call and an Ingress call), so the log can hold more than
+  one entry per action — `createNodePortService()`/`deleteService()` only
+  ever produce one. `KubernetesTask` calls `resetRequestLog()` before each
+  command and reads `getRequestLog()` afterward to persist the literal
+  outbound command(s) into `k8s_commands.request_payload` — see
   [Audit-Logging-Design.md](Audit-Logging-Design.md).
+- `previewCreateNodePortServicePayload()` / `previewCreateIngressPayload()` /
+  `previewDeleteServicePayload()` / `previewDeleteIngressPayload()` — each
+  returns an **array** of one or more `{method, path, body}` entries (one
+  for nodeport-type, two for ingress-type, in the same order the real calls
+  happen), built purely locally, no HTTP calls at all.
+  `IngressRequestService::enqueue()` calls these right after saving a
+  `k8s_commands` row so `request_payload` isn't blank until the bot's next
+  tick. For `create`, the preview body's `spec.selector` (and, for Ingress,
+  the backing Service's name) is always `null` — the real value only exists
+  once the live Deployment lookup below actually happens. For `delete`, the
+  preview is exact: everything it needs (`namespace`,
+  `service_name`/`ingress_name`) is already on the `ingress_requests` row
+  by the time a delete is enqueued.
 
 ## How a NodePort Service is constructed
 

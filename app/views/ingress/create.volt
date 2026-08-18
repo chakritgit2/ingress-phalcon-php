@@ -66,7 +66,8 @@
     <div id="ingress_fields" class="hidden space-y-5">
         <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700" for="host">Host (โดเมน) *</label>
-            <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="text" id="host" name="host" placeholder="myapp.advws.com">
+            <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="text" id="host" name="host" placeholder="myapp.advws.com" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*" title="ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)">
+            <p class="mt-1 text-xs text-gray-500">ใส่แค่ชื่อโดเมนเปล่าๆ เช่น myapp.advws.com — ห้ามมี http:// หรือ / ต่อท้าย</p>
         </div>
 
         <div>
@@ -137,29 +138,36 @@ document.getElementById('namespace').addEventListener('change', function () {
         return;
     }
 
+    // Fallback while listSecrets() is blocked by a cluster RBAC gap (the
+    // dev-ingress-phalcon ServiceAccount lacks get/list on secrets) — the
+    // Ingress itself doesn't need secret-read access, it only stores this
+    // name, so this keeps the form usable until that gap is closed.
+    var FALLBACK_SECRETS = ['advws-tls'];
+
     fetch('/ingress/api/secrets?namespace=' + encodeURIComponent(ns))
         .then(function (res) { return res.json(); })
         .then(function (data) {
-            secretSelect.innerHTML = '';
-            if (!data.secrets || data.secrets.length === 0) {
-                secretSelect.innerHTML = '<option value="">-- ไม่พบ Secret (TLS) --</option>';
-                return;
-            }
-            var placeholder = document.createElement('option');
-            placeholder.value = '';
-            placeholder.textContent = '-- เลือก Secret Name --';
-            secretSelect.appendChild(placeholder);
-            data.secrets.forEach(function (name) {
-                var opt = document.createElement('option');
-                opt.value = name;
-                opt.textContent = name;
-                secretSelect.appendChild(opt);
-            });
-            secretSelect.disabled = false;
+            var secrets = (data.secrets && data.secrets.length > 0) ? data.secrets : FALLBACK_SECRETS;
+            populateSecretSelect(secrets);
         })
         .catch(function () {
-            secretSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
+            populateSecretSelect(FALLBACK_SECRETS);
         });
+
+    function populateSecretSelect(names) {
+        secretSelect.innerHTML = '';
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '-- เลือก Secret Name --';
+        secretSelect.appendChild(placeholder);
+        names.forEach(function (name) {
+            var opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            secretSelect.appendChild(opt);
+        });
+        secretSelect.disabled = false;
+    }
 });
 
 var ingressFields = document.getElementById('ingress_fields');

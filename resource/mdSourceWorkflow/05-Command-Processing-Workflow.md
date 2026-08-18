@@ -70,12 +70,32 @@ docker compose exec app php app/console.php kubernetes processCommands
    writes `ingress_create_failed`/`ingress_delete_failed` to `audit_log` —
    mirrors exactly what the old inline `IngressRequestService` code used to
    do, just triggered from here instead.
-6. **Regardless of outcome** (`finally` block): reads
-   `kubernetesService->getLastRequest()` and stores it as
-   `k8s_commands.request_payload` — `null` if the attempt never got far
-   enough to actually send anything (e.g. the create's Deployment lookup
-   failed before a Service body was ever built). Stamps `processed_at`
+6. **Before the create/delete dispatch above**, calls
+   `kubernetesService->resetRequestLog()` so the log only reflects this
+   command's own call(s), not a previous command processed earlier in the
+   same batch. **Regardless of outcome** (`finally` block): reads
+   `kubernetesService->getRequestLog()` — an array of every mutating
+   request actually attempted for this command, in call order (one entry
+   for nodeport-type, normally two for ingress-type, since
+   `createIngress()`/`deleteIngress()` each make a Service call and an
+   Ingress call). If the log isn't empty, overwrites
+   `k8s_commands.request_payload` with it (JSON-encoded) and sets
+   `payload_source='sent'` — this is the literal request(s) actually sent.
+   If the attempt never got far enough to send anything (e.g. the create's
+   Deployment lookup failed before a Service body was ever built),
+   `request_payload`/`payload_source` are left exactly as
+   `IngressRequestService::enqueue()` set them when the command was first
+   created (see below) — never reset to `null` here. Stamps `processed_at`
    either way.
+
+   `request_payload` is no longer *only* written here: `enqueue()` already
+   stores a best-effort **preview** (`payload_source='preview'`) at request
+   time, built with no Kubernetes calls, so the audit view has something to
+   show well before this task's next tick. For `delete`, that preview
+   already matches exactly what gets sent here (nothing about it needs live
+   data). For `create`, the preview is missing the Deployment's live
+   `spec.selector` — this step is what turns it into the real, fully
+   resolved payload.
 7. Prints a one-line summary per command to stdout/stderr — this is what
    shows up in `kubectl logs` for the CronJob's Pods.
 

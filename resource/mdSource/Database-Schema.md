@@ -59,13 +59,15 @@ for why.
 | `action` | `create` \| `delete` |
 | `status` | `pending` → `success` \| `failed` |
 | `requested_by_user_id` | FK to `users.id` — the session user who submitted the web request that enqueued this command (never null; the expiry sweeper doesn't go through this table, see [Kubernetes-Integration.md](Kubernetes-Integration.md)) |
-| `request_payload` | JSON snapshot of the literal method/path/body sent to the Kubernetes API — `NULL` if the attempt failed before anything was actually sent (e.g. the target Deployment lookup failed) |
+| `request_payload` | JSON `{method, path, body}`. Set twice: first as a **preview** by `IngressRequestService::enqueue()` at request time (no Kubernetes call — for `create`, `body.spec.selector`/service name are `null` since those need a live Deployment lookup; for `delete`, already exact), then overwritten by `KubernetesTask` with the literal request actually sent once it processes the command. `NULL` only if both the preview build and the real attempt failed to produce anything. |
+| `payload_source` | `preview` \| `sent` \| `NULL` — which of the two writes above `request_payload` currently reflects |
 | `result` | JSON snapshot of what Kubernetes returned, on success |
 | `error_message` | Set on failure |
 | `processed_at` | `NULL` while `pending` |
 
 Source: `app/models/K8sCommands.php`, `app/migrations/0005_create_k8s_commands.sql`,
-`0006_add_request_payload_to_k8s_commands.sql`.
+`0006_add_request_payload_to_k8s_commands.sql`,
+`0012_add_payload_source_to_k8s_commands.sql`.
 
 **Why `developer_name` is separate from `created_by_user_id`**: the form
 field is a free-text, editable label (prefilled from the SSO display name,

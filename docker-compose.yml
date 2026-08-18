@@ -9,6 +9,10 @@ services:
       # show up without a rebuild. Harmless in prod too (same content as the
       # image), but only worth the mount for local iteration.
       - ./app:/app/app
+      # Local dev kubeconfig for SERVER_CONFIG (see .env) — deliberately not
+      # baked into the image (see .dockerignore), bind-mounted read-only here
+      # instead so a rebuild is never required to pick up a rotated token.
+      - ./k8s/local-kubeconfig.yaml:/run/secrets/kubeconfig:ro
     depends_on:
       mysql:
         condition: service_healthy

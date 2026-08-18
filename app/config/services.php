@@ -191,7 +191,7 @@ $di->setShared('settingsService', function () {
 });
 
 $di->setShared('ingressRequestService', function () use ($config) {
-    return new IngressRequestService($config->kubernetes->node_ip, $this->get('auditLogService'));
+    return new IngressRequestService($config->kubernetes->node_ip, $this->get('auditLogService'), $this->get('kubernetesService'));
 });
 
 return $di;

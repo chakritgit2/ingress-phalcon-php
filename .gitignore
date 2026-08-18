@@ -6,3 +6,4 @@ k8s/kubeconfig-secret.yaml
 k8s/local-kubeconfig.yaml
 .env
 *.log
+/ingress_export_*.sql

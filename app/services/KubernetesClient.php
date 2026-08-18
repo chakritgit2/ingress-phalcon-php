@@ -16,7 +16,7 @@ use GuzzleHttp\Exception\RequestException;
 class KubernetesClient
 {
     private Client $http;
-    private ?array $lastRequest = null;
+    private array $requestLog = [];
 
     public function __construct(string $apiHost, int $apiPort, string $bearerToken, string $caCertPath)
     {
@@ -52,19 +52,29 @@ class KubernetesClient
     }
 
     /**
-     * The method/path/body of the most recent request this client attempted
-     * to send — recorded *before* the HTTP call, so it reflects what was
-     * actually sent even when the call then fails. Used to log the literal
-     * outbound command for audit purposes (see KubernetesTask).
+     * The method/path/body of every mutating (POST/DELETE) request this
+     * client has attempted to send since the last resetRequestLog() call,
+     * in call order — recorded *before* each HTTP call, so an entry is
+     * present even when that call then fails. Read-only GETs (idempotency
+     * checks, Deployment lookups) are deliberately not recorded here; only
+     * commands actually sent to Kubernetes matter for the audit trail (see
+     * KubernetesTask).
      */
-    public function getLastRequest(): ?array
+    public function getRequestLog(): array
     {
-        return $this->lastRequest;
+        return $this->requestLog;
+    }
+
+    public function resetRequestLog(): void
+    {
+        $this->requestLog = [];
     }
 
     private function request(string $method, string $path, ?array $body = null): array
     {
-        $this->lastRequest = ['method' => $method, 'path' => $path, 'body' => $body];
+        if ($method !== 'GET') {
+            $this->requestLog[] = ['method' => $method, 'path' => $path, 'body' => $body];
+        }
 
         try {
             $options = $body !== null ? ['json' => $body] : [];

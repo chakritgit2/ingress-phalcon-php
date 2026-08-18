@@ -10,6 +10,7 @@ class K8sCommands extends Model
     public int $ingress_request_id;
     public string $action;
     public ?string $request_payload = null;
+    public ?string $payload_source = null;
     public string $status;
     public int $requested_by_user_id;
     public ?string $result = null;
