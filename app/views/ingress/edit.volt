@@ -1,25 +1,25 @@
 {% extends "layouts/main.volt" %}
 {% block content %}
-<h1 class="mb-6 border-b border-gray-200 pb-4 text-xl font-semibold text-gray-900">สร้าง Ingress ใหม่</h1>
+<h1 class="mb-6 border-b border-gray-200 pb-4 text-xl font-semibold text-gray-900">แก้ไข Ingress</h1>
 
-<form method="post" action="/ingress/store" class="max-w-md space-y-6">
+<form method="post" action="/ingress/{{ row.id }}/update" class="max-w-md space-y-6">
     <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-gray-700">ประเภท *</label>
         <div class="inline-flex rounded-lg bg-gray-100 p-1">
             <label class="cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium text-gray-600 transition has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-sm has-[:checked]:ring-1 has-[:checked]:ring-blue-200">
-                <input type="radio" name="request_type" value="nodeport" checked class="sr-only">
+                <input type="radio" name="request_type" value="nodeport" {{ row.request_type != 'ingress' ? 'checked' : '' }} class="sr-only">
                 NodePort ชั่วคราว
             </label>
             <label class="cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium text-gray-600 transition has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-sm has-[:checked]:ring-1 has-[:checked]:ring-blue-200">
-                <input type="radio" name="request_type" value="ingress" class="sr-only">
+                <input type="radio" name="request_type" value="ingress" {{ row.request_type == 'ingress' ? 'checked' : '' }} class="sr-only">
                 Ingress + TLS
             </label>
         </div>
 
-        <p id="type_desc_nodeport" class="mt-2 text-xs text-gray-500">เข้าถึงผ่าน <code class="rounded bg-gray-100 px-1 py-0.5 text-[11px]">node_ip:node_port</code> โดยตรง ไม่ต้องมีโดเมนหรือ TLS</p>
-        <p id="type_desc_ingress" class="mt-2 hidden text-xs text-gray-500">เข้าถึงผ่านโดเมนที่กำหนดเอง (HTTPS) ต้องกรอก Host และเลือก TLS Secret</p>
+        <p id="type_desc_nodeport" class="mt-2 {{ row.request_type == 'ingress' ? 'hidden' : '' }} text-xs text-gray-500">เข้าถึงผ่าน <code class="rounded bg-gray-100 px-1 py-0.5 text-[11px]">node_ip:node_port</code> โดยตรง ไม่ต้องมีโดเมนหรือ TLS</p>
+        <p id="type_desc_ingress" class="mt-2 {{ row.request_type != 'ingress' ? 'hidden' : '' }} text-xs text-gray-500">เข้าถึงผ่านโดเมนที่กำหนดเอง (HTTPS) ต้องกรอก Host และเลือก TLS Secret</p>
 
         <p class="mt-2 flex items-start gap-1.5 text-xs text-gray-500">
             <svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -32,7 +32,7 @@
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-gray-700" for="developer_name">ใคร (Developer Name) *</label>
-        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="text" id="developer_name" name="developer_name" value="{{ developerNameDefault }}" required>
+        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="text" id="developer_name" name="developer_name" value="{{ row.developer_name }}" required>
     </div>
 
     <div>
@@ -40,7 +40,7 @@
         <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" id="namespace" name="namespace" required>
             <option value="">-- เลือก Namespace --</option>
             {% for ns in namespaces %}
-            <option value="{{ ns }}">{{ ns }}</option>
+            <option value="{{ ns }}" {{ ns == row.namespace ? 'selected' : '' }}>{{ ns }}</option>
             {% endfor %}
         </select>
     </div>
@@ -54,54 +54,59 @@
             </svg>
         </label>
         <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400" id="deployment_name" name="deployment_name" required disabled>
-            <option value="">-- เลือก Namespace ก่อน --</option>
+            <option value="{{ row.deployment_name }}">{{ row.deployment_name }}</option>
         </select>
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-gray-700" for="target_port">Port</label>
-        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="number" id="target_port" name="target_port" value="80" min="1" max="65535" required>
+        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="number" id="target_port" name="target_port" value="{{ row.target_port }}" min="1" max="65535" required>
     </div>
 
-    <div id="ingress_fields" class="hidden space-y-5 border-l-2 border-blue-200 pl-4">
+    <div id="ingress_fields" class="{{ row.request_type != 'ingress' ? 'hidden' : '' }} space-y-5 border-l-2 border-blue-200 pl-4">
         <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700" for="host">Host (โดเมน) *</label>
-            <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="text" id="host" name="host" placeholder="myapp.advws.com" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*" title="ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)">
+            <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="text" id="host" name="host" value="{{ row.host }}" placeholder="myapp.advws.com" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*" title="ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)" {{ row.request_type == 'ingress' ? 'required' : '' }}>
             <p class="mt-1 text-xs text-gray-500">ใส่แค่ชื่อโดเมนเปล่าๆ เช่น myapp.advws.com — ห้ามมี http:// หรือ / ต่อท้าย</p>
         </div>
 
         <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700" for="secret_name">Secret Name (TLS) *</label>
-            <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400" id="secret_name" name="secret_name" disabled>
-                <option value="">-- เลือก Namespace ก่อน --</option>
+            <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400" id="secret_name" name="secret_name" disabled {{ row.request_type == 'ingress' ? 'required' : '' }}>
+                <option value="{{ row.secret_name }}">{{ row.secret_name }}</option>
             </select>
         </div>
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-gray-700" for="schedule_end_minutes">Schedule End (นาที) *</label>
-        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="number" id="schedule_end_minutes" name="schedule_end_minutes" min="1" max="10080" required>
+        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="number" id="schedule_end_minutes" name="schedule_end_minutes" value="{{ row.schedule_end_minutes }}" min="1" max="10080" required>
     </div>
 
     <div>
         <label class="mb-1.5 block text-sm font-medium text-gray-700" for="note">หมายเหตุ (ถ้ามี)</label>
-        <textarea class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" id="note" name="note" rows="2" maxlength="255" placeholder="เหตุผลที่ขอ เช่น ทดสอบ feature X ให้ทีม QA"></textarea>
+        <textarea class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" id="note" name="note" rows="2" maxlength="255" placeholder="เหตุผลที่ขอ เช่น ทดสอบ feature X ให้ทีม QA">{{ row.note|e }}</textarea>
     </div>
 
     <div class="pt-2">
-        <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 cursor-pointer">สร้าง</button>
+        <button type="submit" class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 cursor-pointer">บันทึกการแก้ไข</button>
     </div>
 </form>
 
 <script>
-document.getElementById('namespace').addEventListener('change', function () {
-    var ns = this.value;
+var PRESELECT_DEPLOYMENT = {{ row.deployment_name ? ('"' ~ row.deployment_name ~ '"') : 'null' }};
+var PRESELECT_SECRET = {{ row.secret_name ? ('"' ~ row.secret_name ~ '"') : 'null' }};
+
+function loadNamespaceOptions(ns, preselectDeployment, preselectSecret, silent) {
     var depSelect = document.getElementById('deployment_name');
     var spinner = document.getElementById('deployment_spinner');
-    depSelect.disabled = true;
-    depSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+    if (!silent) {
+        depSelect.disabled = true;
+        depSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+    }
 
     if (!ns) {
+        depSelect.disabled = true;
         depSelect.innerHTML = '<option value="">-- เลือก Namespace ก่อน --</option>';
     } else {
         spinner.classList.remove('hidden');
@@ -122,12 +127,17 @@ document.getElementById('namespace').addEventListener('change', function () {
                     var opt = document.createElement('option');
                     opt.value = d.name;
                     opt.textContent = d.name + ' (replicas: ' + d.replicas + ')';
+                    if (preselectDeployment && d.name === preselectDeployment) {
+                        opt.selected = true;
+                    }
                     depSelect.appendChild(opt);
                 });
                 depSelect.disabled = false;
             })
             .catch(function () {
-                depSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
+                if (!silent) {
+                    depSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
+                }
             })
             .finally(function () {
                 spinner.classList.add('hidden');
@@ -135,10 +145,13 @@ document.getElementById('namespace').addEventListener('change', function () {
     }
 
     var secretSelect = document.getElementById('secret_name');
-    secretSelect.disabled = true;
-    secretSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+    if (!silent) {
+        secretSelect.disabled = true;
+        secretSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+    }
 
     if (!ns) {
+        secretSelect.disabled = true;
         secretSelect.innerHTML = '<option value="">-- เลือก Namespace ก่อน --</option>';
         return;
     }
@@ -153,13 +166,13 @@ document.getElementById('namespace').addEventListener('change', function () {
         .then(function (res) { return res.json(); })
         .then(function (data) {
             var secrets = (data.secrets && data.secrets.length > 0) ? data.secrets : FALLBACK_SECRETS;
-            populateSecretSelect(secrets);
+            populateSecretSelect(secrets, preselectSecret);
         })
         .catch(function () {
-            populateSecretSelect(FALLBACK_SECRETS);
+            populateSecretSelect(FALLBACK_SECRETS, preselectSecret);
         });
 
-    function populateSecretSelect(names) {
+    function populateSecretSelect(names, preselect) {
         secretSelect.innerHTML = '';
         var placeholder = document.createElement('option');
         placeholder.value = '';
@@ -169,10 +182,17 @@ document.getElementById('namespace').addEventListener('change', function () {
             var opt = document.createElement('option');
             opt.value = name;
             opt.textContent = name;
+            if (preselect && name === preselect) {
+                opt.selected = true;
+            }
             secretSelect.appendChild(opt);
         });
         secretSelect.disabled = false;
     }
+}
+
+document.getElementById('namespace').addEventListener('change', function () {
+    loadNamespaceOptions(this.value, null, null);
 });
 
 var ingressFields = document.getElementById('ingress_fields');
@@ -189,5 +209,10 @@ document.querySelectorAll('input[name="request_type"]').forEach(function (radio)
         document.getElementById('secret_name').required = isIngress;
     });
 });
+
+var initialNamespace = document.getElementById('namespace').value;
+if (initialNamespace) {
+    loadNamespaceOptions(initialNamespace, PRESELECT_DEPLOYMENT, PRESELECT_SECRET, true);
+}
 </script>
 {% endblock %}

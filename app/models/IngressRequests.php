@@ -20,6 +20,7 @@ class IngressRequests extends Model
     public ?string $host = null;
     public ?string $secret_name = null;
     public int $schedule_end_minutes;
+    public ?string $note = null;
     public int $created_by_user_id;
     public ?string $created_at = null;
     public ?string $expires_at = null;

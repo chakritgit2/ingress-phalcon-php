@@ -404,7 +404,12 @@ class KubernetesService implements KubernetesServiceInterface
 
     private function assertValidLabel(string $value, string $field): string
     {
-        if (!preg_match(self::DNS_1123_LABEL, $value) || strlen($value) > 253) {
+        // 63, not 253: these values also get used as Kubernetes label
+        // values (k8s-app, advws-group, etc.), and label values are capped
+        // at 63 chars — a longer namespace/deployment/service/ingress name
+        // would pass this check but then get rejected by the k8s API when
+        // it's used as a label.
+        if (!preg_match(self::DNS_1123_LABEL, $value) || strlen($value) > 63) {
             throw new \InvalidArgumentException("Invalid {$field}: {$value}");
         }
         return $value;

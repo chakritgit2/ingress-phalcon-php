@@ -10,6 +10,7 @@ use App\Services\KubernetesClient;
 use App\Services\KubernetesService;
 use App\Services\MockKubernetesService;
 use App\Services\SettingsService;
+use App\Services\UsersService;
 use Phalcon\Cache\Cache;
 use Phalcon\Db\Adapter\Pdo\Mysql as MysqlAdapter;
 use Phalcon\Di\FactoryDefault;
@@ -197,6 +198,10 @@ $di->setShared('settingsService', function () {
 
 $di->setShared('ingressRequestService', function () use ($config) {
     return new IngressRequestService($config->kubernetes->node_ip, $this->get('auditLogService'), $this->get('kubernetesService'));
+});
+
+$di->setShared('usersService', function () {
+    return new UsersService($this->get('auditLogService'));
 });
 
 return $di;

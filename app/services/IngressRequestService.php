@@ -26,6 +26,9 @@ class IngressRequestService
     // logged preview-build failure or a bot-processing error.
     private const DNS_1123_SUBDOMAIN = '/^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/';
 
+    // Matches the ingress_requests.note column width (see migrations/0015_add_note_to_ingress_requests.sql)
+    private const MAX_NOTE_LENGTH = 255;
+
     private string $nodeIp;
     private AuditLogService $auditLogService;
     private KubernetesServiceInterface $kubernetesService;
@@ -42,6 +45,116 @@ class IngressRequestService
      */
     public function create(array $data, Users $user): IngressRequests
     {
+        $normalized = $this->validateAndNormalize($data);
+
+        $row = new IngressRequests();
+        $row->developer_name = $normalized['developer_name'];
+        $row->namespace = $normalized['namespace'];
+        $row->deployment_name = $normalized['deployment_name'];
+        $row->request_type = $normalized['request_type'];
+        $row->target_port = $normalized['target_port'];
+        $row->node_ip = $this->nodeIp;
+        $row->host = $normalized['host'];
+        $row->secret_name = $normalized['secret_name'];
+        $row->schedule_end_minutes = $normalized['schedule_end_minutes'];
+        $row->note = $normalized['note'];
+        $row->created_by_user_id = $user->id;
+        $row->status = 'pending';
+
+        if (!$row->save()) {
+            throw new \RuntimeException(implode(', ', array_map(
+                fn ($m) => $m->getMessage(),
+                $row->getMessages()
+            )));
+        }
+
+        $this->enqueue($row, 'create', $user, 'ingress_requested');
+
+        return $row;
+    }
+
+    /**
+     * Only reachable when isEditable($row) — i.e. no live Service/Ingress
+     * exists yet for this request (still `pending`, or `failed` on its
+     * `create` attempt). Just corrects the DB row: for `pending` rows the
+     * already-queued `k8s_commands` row will read the corrected fields
+     * straight off $row on its next tick (see KubernetesTask::processCommandsAction()),
+     * so nothing else needs to change here; for `failed` rows the user
+     * retries separately via the existing retry() flow.
+     */
+    public function update(IngressRequests $row, array $data, Users $user): void
+    {
+        if (!$this->isEditable($row)) {
+            throw new \RuntimeException('รายการนี้ไม่สามารถแก้ไขได้แล้ว');
+        }
+
+        $normalized = $this->validateAndNormalize($data);
+
+        $row->developer_name = $normalized['developer_name'];
+        $row->namespace = $normalized['namespace'];
+        $row->deployment_name = $normalized['deployment_name'];
+        $row->request_type = $normalized['request_type'];
+        $row->target_port = $normalized['target_port'];
+        $row->host = $normalized['host'];
+        $row->secret_name = $normalized['secret_name'];
+        $row->schedule_end_minutes = $normalized['schedule_end_minutes'];
+        $row->note = $normalized['note'];
+
+        if (!$row->save()) {
+            throw new \RuntimeException(implode(', ', array_map(
+                fn ($m) => $m->getMessage(),
+                $row->getMessages()
+            )));
+        }
+
+        $this->auditLogService->log('ingress_updated', AuditLogService::actorLabelFor($user), [
+            'ingress_request_id' => $row->id,
+            'actor_user_id' => $user->id,
+            'namespace' => $row->namespace,
+            'deployment_name' => $row->deployment_name,
+            'node_port' => $row->node_port,
+            'node_ip' => $row->node_ip,
+            'detail' => [
+                'request_type' => $row->request_type,
+                'host' => $row->host,
+                'secret_name' => $row->secret_name,
+                'target_port' => $row->target_port,
+                'note' => $row->note,
+            ],
+        ]);
+    }
+
+    /**
+     * true only when no live Service/Ingress can exist for $row yet:
+     * `pending` always follows a `create` action in this state machine (see
+     * retry()'s status assignment below), and a `failed` row is only safe
+     * to edit if its last command was the `create` attempt itself failing
+     * — a failed `delete` may still correspond to a real cluster resource.
+     */
+    public function isEditable(IngressRequests $row): bool
+    {
+        if ($row->status === 'pending') {
+            return true;
+        }
+
+        if ($row->status !== 'failed') {
+            return false;
+        }
+
+        $lastCommand = K8sCommands::findFirst([
+            'conditions' => 'ingress_request_id = :id:',
+            'bind' => ['id' => $row->id],
+            'order' => 'id DESC',
+        ]);
+
+        return $lastCommand !== null && $lastCommand->action === 'create';
+    }
+
+    /**
+     * @return array{developer_name: string, namespace: string, deployment_name: string, request_type: string, target_port: int, host: ?string, secret_name: ?string, schedule_end_minutes: int, note: ?string}
+     */
+    private function validateAndNormalize(array $data): array
+    {
         $developerName = trim((string) $data['developer_name']);
         $namespace = trim((string) $data['namespace']);
         $deploymentName = trim((string) $data['deployment_name']);
@@ -50,6 +163,7 @@ class IngressRequestService
         $requestType = (string) ($data['request_type'] ?? 'nodeport');
         $host = trim((string) ($data['host'] ?? ''));
         $secretName = trim((string) ($data['secret_name'] ?? ''));
+        $note = trim((string) ($data['note'] ?? ''));
 
         if ($developerName === '') {
             throw new \InvalidArgumentException('กรุณาระบุชื่อ Developer');
@@ -59,6 +173,9 @@ class IngressRequestService
         }
         if ($scheduleMinutes < 1 || $scheduleMinutes > self::MAX_SCHEDULE_MINUTES) {
             throw new \InvalidArgumentException('Schedule End ต้องอยู่ระหว่าง 1-' . self::MAX_SCHEDULE_MINUTES . ' นาที');
+        }
+        if (strlen($note) > self::MAX_NOTE_LENGTH) {
+            throw new \InvalidArgumentException('หมายเหตุยาวเกินไป (ไม่เกิน ' . self::MAX_NOTE_LENGTH . ' ตัวอักษร)');
         }
         if (!in_array($requestType, ['nodeport', 'ingress'], true)) {
             throw new \InvalidArgumentException('ประเภท Ingress ไม่ถูกต้อง');
@@ -75,29 +192,17 @@ class IngressRequestService
             }
         }
 
-        $row = new IngressRequests();
-        $row->developer_name = $developerName;
-        $row->namespace = $namespace;
-        $row->deployment_name = $deploymentName;
-        $row->request_type = $requestType;
-        $row->target_port = $targetPort;
-        $row->node_ip = $this->nodeIp;
-        $row->host = $requestType === 'ingress' ? $host : null;
-        $row->secret_name = $requestType === 'ingress' ? $secretName : null;
-        $row->schedule_end_minutes = $scheduleMinutes;
-        $row->created_by_user_id = $user->id;
-        $row->status = 'pending';
-
-        if (!$row->save()) {
-            throw new \RuntimeException(implode(', ', array_map(
-                fn ($m) => $m->getMessage(),
-                $row->getMessages()
-            )));
-        }
-
-        $this->enqueue($row, 'create', $user, 'ingress_requested');
-
-        return $row;
+        return [
+            'developer_name' => $developerName,
+            'namespace' => $namespace,
+            'deployment_name' => $deploymentName,
+            'request_type' => $requestType,
+            'target_port' => $targetPort,
+            'host' => $requestType === 'ingress' ? $host : null,
+            'secret_name' => $requestType === 'ingress' ? $secretName : null,
+            'schedule_end_minutes' => $scheduleMinutes,
+            'note' => $note !== '' ? $note : null,
+        ];
     }
 
     public function deleteManually(IngressRequests $row, Users $user): void
@@ -203,6 +308,7 @@ class IngressRequestService
                 'host' => $row->host,
                 'secret_name' => $row->secret_name,
                 'target_port' => $row->target_port,
+                'note' => $row->note,
             ],
         ]);
     }

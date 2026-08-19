@@ -5,6 +5,7 @@ use Phalcon\Mvc\Application;
 error_reporting(E_ALL);
 //show errors
 ini_set('display_errors', '1');
+date_default_timezone_set('Asia/Bangkok');
 require dirname(__DIR__) . '/vendor/autoload.php';
 
 try {

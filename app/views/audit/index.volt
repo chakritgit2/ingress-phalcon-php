@@ -1,7 +1,8 @@
 {% extends "layouts/main.volt" %}
+{% block container_class %}max-w-7xl{% endblock %}
 {% block content %}
-<div class="mb-6 flex items-center justify-between">
-    <h1 class="text-2xl font-bold text-gray-900">Audit Log</h1>
+<div class="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-4">
+    <h1 class="text-xl font-semibold text-gray-900">Audit Log</h1>
     <a href="/audit/security" class="inline-flex items-center gap-1.5 text-sm font-medium text-gray-600 transition hover:text-gray-900">
         Security Log
         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -10,20 +11,20 @@
     </a>
 </div>
 
-<div class="overflow-x-auto rounded-lg border border-gray-200">
-    <table class="w-full border-collapse text-sm">
+<div class="overflow-x-auto">
+    <table class="w-full min-w-[900px] text-sm">
         <thead>
             <tr>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ใคร</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ใช้อะไร</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ที่ Namespace อะไร</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ออกที่ไหน</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">เมื่อไหร</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">นานเท่าไหร</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500"></th>
+                <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">ใคร</th>
+                <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">ใช้อะไร</th>
+                <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">ที่ Namespace อะไร</th>
+                <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">ออกที่ไหน</th>
+                <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">เมื่อไหร</th>
+                <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">นานเท่าไหร</th>
+                <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500"></th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100 bg-white">
             {% for row in rows %}
             <tr class="transition hover:bg-gray-50">
                 <td class="px-4 py-3 text-gray-700">{{ row.developer_name }}</td>
@@ -60,7 +61,7 @@
 </div>
 
 <p class="mt-4 flex gap-3">
-    {% if page > 1 %}<a class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50" href="/audit?page={{ page - 1 }}">&laquo; ก่อนหน้า</a>{% endif %}
-    {% if rows|length >= 50 %}<a class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50" href="/audit?page={{ page + 1 }}">ถัดไป &raquo;</a>{% endif %}
+    {% if page > 1 %}<a class="inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50" href="/audit?page={{ page - 1 }}">&laquo; ก่อนหน้า</a>{% endif %}
+    {% if rows|length >= 50 %}<a class="inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50" href="/audit?page={{ page + 1 }}">ถัดไป &raquo;</a>{% endif %}
 </p>
 {% endblock %}
