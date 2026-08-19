@@ -1,8 +1,9 @@
 {% extends "layouts/main.volt" %}
+{% block container_class %}max-w-7xl{% endblock %}
 {% block content %}
-<h1 class="mb-6 text-2xl font-bold text-gray-900">รายละเอียด Ingress #{{ row.id }}</h1>
+<h1 class="mb-6 border-b border-gray-200 pb-4 text-xl font-semibold text-gray-900">รายละเอียด Ingress #{{ row.id }}</h1>
 
-<div class="overflow-hidden rounded-lg border border-gray-200">
+<div class="max-w-2xl overflow-hidden rounded-lg border border-gray-200">
     <table class="w-full border-collapse text-sm">
         <tbody class="divide-y divide-gray-100">
             <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600">ใคร</th><td class="px-4 py-3 text-gray-800">{{ row.developer_name }}</td></tr>
@@ -23,23 +24,28 @@
 </div>
 
 <h2 class="mt-8 mb-4 text-lg font-semibold text-gray-900">Trail</h2>
-<div class="overflow-x-auto rounded-lg border border-gray-200">
-    <table class="w-full border-collapse text-sm">
+<div class="overflow-x-auto">
+    <table class="w-full min-w-[720px] text-sm">
         <thead>
             <tr>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">เวลา</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Event</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Actor</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">รายละเอียด</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">เวลา</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Event</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Actor</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">รายละเอียด</th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100 bg-white">
             {% for e in events %}
+            {% set detail = e.getDetailArray() %}
             <tr class="transition hover:bg-gray-50">
                 <td class="px-4 py-3 text-gray-700">{{ e.created_at }}</td>
-                <td class="px-4 py-3 text-gray-700">{{ e.event_type }}</td>
+                <td class="px-4 py-3">
+                    {% include "partials/event_badge" with ["event_type": e.event_type, "detail": detail] %}
+                </td>
                 <td class="px-4 py-3 text-gray-700">{{ e.actor_label }}</td>
-                <td class="px-4 py-3 text-gray-700">{{ e.detail }}</td>
+                <td class="px-4 py-3 text-gray-700">
+                    {% include "partials/event_detail" with ["event_type": e.event_type, "detail": detail] %}
+                </td>
             </tr>
             {% else %}
             <tr><td class="px-4 py-8 text-center text-gray-500" colspan="4">
@@ -57,18 +63,18 @@
 
 
 <h2 class="mt-8 mb-4 text-lg font-semibold text-gray-900">คำสั่งที่ส่งไป Kubernetes</h2>
-<div class="overflow-x-auto rounded-lg border border-gray-200">
-    <table class="w-full border-collapse text-sm">
+<div class="overflow-x-auto">
+    <table class="w-full min-w-[900px] text-sm">
         <thead>
             <tr>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">เวลา</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Action</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">สถานะ</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">Request ที่ส่งไปจริง</th>
-                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">ผลลัพธ์ / Error</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">เวลา</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Action</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">สถานะ</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">Request ที่ส่งไปจริง</th>
+                <th class="bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500">ผลลัพธ์ / Error</th>
             </tr>
         </thead>
-        <tbody class="divide-y divide-gray-100">
+        <tbody class="divide-y divide-gray-100 bg-white">
             {% for c in commands %}
             <tr class="transition hover:bg-gray-50 align-top">
                 <td class="px-4 py-3 whitespace-nowrap text-gray-700">
@@ -80,9 +86,9 @@
                 <td class="px-4 py-3 font-mono text-xs text-gray-600">
                     {% if c.request_payload %}
                     {% if c.payload_source == 'preview' %}
-                    <span class="mb-1 inline-flex items-center gap-1.5 rounded-full bg-gray-200 px-2.5 py-0.5 text-xs font-medium text-gray-700"><span class="h-1.5 w-1.5 rounded-full bg-gray-500"></span>แผน (ยังไม่ส่ง)</span>
+                    <span class="mb-1 inline-flex items-center gap-1.5 rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-inset ring-gray-500/10"><span class="h-1.5 w-1.5 rounded-full bg-gray-400"></span>แผน (ยังไม่ส่ง)</span>
                     {% elseif c.payload_source == 'sent' %}
-                    <span class="mb-1 inline-flex items-center gap-1.5 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>ส่งจริง</span>
+                    <span class="mb-1 inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>ส่งจริง</span>
                     {% endif %}
                     <pre class="whitespace-pre-wrap break-all">{{ c.request_payload }}</pre>
                     {% else %}<span class="text-gray-400">-</span>{% endif %}

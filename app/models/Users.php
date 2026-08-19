@@ -6,6 +6,8 @@ use Phalcon\Mvc\Model;
 
 class Users extends Model
 {
+    public const ROLES = ['devops', 'viewer'];
+
     public ?int $id = null;
     public ?string $google_sub = null;
     public string $email;

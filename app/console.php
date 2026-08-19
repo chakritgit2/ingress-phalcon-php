@@ -13,6 +13,7 @@ use Phalcon\Db\Adapter\Pdo\Mysql as MysqlAdapter;
 use Phalcon\Di\FactoryDefault\Cli as CliDi;
 
 error_reporting(E_ALL);
+date_default_timezone_set('Asia/Bangkok');
 
 require __DIR__ . '/../vendor/autoload.php';
 

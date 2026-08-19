@@ -14,8 +14,6 @@ use Phalcon\Cli\Task;
  */
 class UsersTask extends Task
 {
-    private const ROLES = ['devops', 'viewer'];
-
     public function setPasswordAction(?string $email = null, ?string $password = null, ?string $role = null): void
     {
         if (!$email || !$password) {
@@ -28,7 +26,7 @@ class UsersTask extends Task
             exit(1);
         }
 
-        if ($role !== null && !in_array($role, self::ROLES, true)) {
+        if ($role !== null && !in_array($role, Users::ROLES, true)) {
             fwrite(STDERR, "error: role must be 'devops' or 'viewer'\n");
             exit(1);
         }
