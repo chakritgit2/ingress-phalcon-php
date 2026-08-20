@@ -36,6 +36,8 @@ $router->add('/users/{id:[0-9]+}/role', ['controller' => 'users', 'action' => 'u
 $router->add('/users/{id:[0-9]+}/toggle-active', ['controller' => 'users', 'action' => 'toggleActive'])->via(['POST']);
 $router->add('/users/{id:[0-9]+}/reset-password', ['controller' => 'users', 'action' => 'resetPassword'])->via(['POST']);
 
+$router->add('/events/stream', ['controller' => 'events', 'action' => 'stream'])->via(['GET']);
+
 $router->add('/audit', ['controller' => 'audit', 'action' => 'index'])->via(['GET']);
 $router->add('/audit/security', ['controller' => 'audit', 'action' => 'security'])->via(['GET']);
 $router->add('/audit/security/export', ['controller' => 'audit', 'action' => 'securityExport'])->via(['GET']);

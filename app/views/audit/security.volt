@@ -56,4 +56,40 @@
     </svg>
     กลับไป Audit Log
 </a></p>
+
+{% if page == 1 %}
+<script>
+// Live updates on page 1 only — new events always land at the top there;
+// deeper pages would just get their rows shuffled underneath the reader.
+// See app/controllers/EventsController.php.
+(function () {
+    var tbody = document.querySelector('table tbody');
+    if (!tbody || typeof EventSource === 'undefined') {
+        return;
+    }
+
+    var refreshing = false;
+
+    function refresh() {
+        if (refreshing) {
+            return;
+        }
+        refreshing = true;
+
+        fetch(window.location.href)
+            .then(function (res) { return res.text(); })
+            .then(function (html) {
+                var newTbody = new DOMParser().parseFromString(html, 'text/html').querySelector('table tbody');
+                if (newTbody) {
+                    tbody.innerHTML = newTbody.innerHTML;
+                }
+            })
+            .catch(function () {})
+            .finally(function () { refreshing = false; });
+    }
+
+    new EventSource('/events/stream?channel=security').addEventListener('update', refresh);
+})();
+</script>
+{% endif %}
 {% endblock %}
