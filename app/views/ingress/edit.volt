@@ -235,7 +235,7 @@ function generateUuidV4() {
 }
 
 document.getElementById('genHostUuidBtn').addEventListener('click', function () {
-    hostInput.value = generateUuidV4() + '.advws.com';
+    hostInput.value = 'nodered-' + generateUuidV4() + '.advws.org';
 });
 </script>
 {% endblock %}
