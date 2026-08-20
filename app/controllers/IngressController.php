@@ -163,7 +163,9 @@ class IngressController extends ControllerBase
         $this->response->setContentType('application/json');
 
         try {
-            $deployments = $this->kubernetesService->listDeployments($namespace);
+            $deployments = $namespace === ''
+                ? $this->kubernetesService->listAllDeployments()
+                : $this->kubernetesService->listDeployments($namespace);
             return $this->response->setJsonContent(['deployments' => $deployments]);
         } catch (\Throwable $e) {
             $this->response->setStatusCode(400);

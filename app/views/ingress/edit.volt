@@ -101,105 +101,52 @@
 </form>
 
 <script>
+enhanceSearchableSelect(document.getElementById('namespace'));
+enhanceSearchableSelect(document.getElementById('deployment_name'));
+enhanceSearchableSelect(document.getElementById('secret_name'));
+
 var PRESELECT_DEPLOYMENT = {{ row.deployment_name ? ('"' ~ row.deployment_name ~ '"') : 'null' }};
 var PRESELECT_SECRET = {{ row.secret_name ? ('"' ~ row.secret_name ~ '"') : 'null' }};
 
-function loadNamespaceOptions(ns, preselectDeployment, preselectSecret, silent) {
-    var depSelect = document.getElementById('deployment_name');
-    var spinner = document.getElementById('deployment_spinner');
-    if (!silent) {
-        depSelect.disabled = true;
-        depSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
-    }
+var namespaceSelect = document.getElementById('namespace');
+var deploymentSelect = document.getElementById('deployment_name');
+var secretSelect = document.getElementById('secret_name');
+var deploymentSpinner = document.getElementById('deployment_spinner');
 
+namespaceSelect.addEventListener('change', function () {
+    var ns = this.value;
     if (!ns) {
-        depSelect.disabled = true;
-        depSelect.innerHTML = '<option value="">-- เลือก Namespace ก่อน --</option>';
-    } else {
-        spinner.classList.remove('hidden');
-
-        fetch('/ingress/api/deployments?namespace=' + encodeURIComponent(ns))
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                depSelect.innerHTML = '';
-                if (!data.deployments || data.deployments.length === 0) {
-                    depSelect.innerHTML = '<option value="">-- ไม่พบ Deployment --</option>';
-                    return;
-                }
-                var placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = '-- เลือก Deployment --';
-                depSelect.appendChild(placeholder);
-                data.deployments.forEach(function (d) {
-                    var opt = document.createElement('option');
-                    opt.value = d.name;
-                    opt.textContent = d.name + ' (replicas: ' + d.replicas + ')';
-                    if (preselectDeployment && d.name === preselectDeployment) {
-                        opt.selected = true;
-                    }
-                    depSelect.appendChild(opt);
-                });
-                depSelect.disabled = false;
-            })
-            .catch(function () {
-                if (!silent) {
-                    depSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
-                }
-            })
-            .finally(function () {
-                spinner.classList.add('hidden');
-            });
-    }
-
-    var secretSelect = document.getElementById('secret_name');
-    if (!silent) {
-        secretSelect.disabled = true;
-        secretSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
-    }
-
-    if (!ns) {
+        loadAllDeployments(deploymentSelect, deploymentSpinner, null, null, false);
         secretSelect.disabled = true;
         secretSelect.innerHTML = '<option value="">-- เลือก Namespace ก่อน --</option>';
         return;
     }
+    loadDeploymentsForNamespace(deploymentSelect, deploymentSpinner, ns, null, false);
+    loadSecretsForNamespace(secretSelect, ns, null, false);
+});
 
-    // Fallback while listSecrets() is blocked by a cluster RBAC gap (the
-    // dev-ingress-phalcon ServiceAccount lacks get/list on secrets) — the
-    // Ingress itself doesn't need secret-read access, it only stores this
-    // name, so this keeps the form usable until that gap is closed.
-    var FALLBACK_SECRETS = ['advws-tls'];
+// Same "pick either field first" behaviour as create.volt: the initial load
+// below shows every Deployment across every namespace (so you can jump
+// straight to a different namespace's Deployment while editing), and this
+// reads the chosen namespace back off the <option> to back-fill Namespace.
+deploymentSelect.addEventListener('change', function () {
+    var opt = this.options[this.selectedIndex];
+    var ns = opt ? opt.dataset.namespace : '';
+    if (!ns || namespaceSelect.value === ns) return;
 
-    fetch('/ingress/api/secrets?namespace=' + encodeURIComponent(ns))
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-            var secrets = (data.secrets && data.secrets.length > 0) ? data.secrets : FALLBACK_SECRETS;
-            populateSecretSelect(secrets, preselectSecret);
-        })
-        .catch(function () {
-            populateSecretSelect(FALLBACK_SECRETS, preselectSecret);
-        });
+    namespaceSelect.value = ns;
+    syncSearchableSelectDisplay(namespaceSelect);
+    loadDeploymentsForNamespace(deploymentSelect, deploymentSpinner, ns, this.value, false);
+    loadSecretsForNamespace(secretSelect, ns, null, false);
+});
 
-    function populateSecretSelect(names, preselect) {
-        secretSelect.innerHTML = '';
-        var placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = '-- เลือก Secret Name --';
-        secretSelect.appendChild(placeholder);
-        names.forEach(function (name) {
-            var opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            if (preselect && name === preselect) {
-                opt.selected = true;
-            }
-            secretSelect.appendChild(opt);
-        });
-        secretSelect.disabled = false;
-    }
-}
-
-document.getElementById('namespace').addEventListener('change', function () {
-    loadNamespaceOptions(this.value, null, null);
+// nodered's own default container port is 1880, not 80 — auto-fill it
+// whenever that Deployment is picked so the common case needs no manual edit.
+// Only wired to 'change' (a user re-picking), not the silent initial load,
+// so it never clobbers this row's already-stored target_port on page open.
+var targetPortInput = document.getElementById('target_port');
+deploymentSelect.addEventListener('change', function () {
+    targetPortInput.value = this.value === 'nodered' ? 1880 : 80;
 });
 
 var ingressFields = document.getElementById('ingress_fields');
@@ -217,9 +164,10 @@ document.querySelectorAll('input[name="request_type"]').forEach(function (radio)
     });
 });
 
-var initialNamespace = document.getElementById('namespace').value;
+var initialNamespace = namespaceSelect.value;
+loadAllDeployments(deploymentSelect, deploymentSpinner, PRESELECT_DEPLOYMENT, initialNamespace, true);
 if (initialNamespace) {
-    loadNamespaceOptions(initialNamespace, PRESELECT_DEPLOYMENT, PRESELECT_SECRET, true);
+    loadSecretsForNamespace(secretSelect, initialNamespace, PRESELECT_SECRET, true);
 }
 
 function generateUuidV4() {

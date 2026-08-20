@@ -54,8 +54,9 @@
             </svg>
         </label>
         <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900 dark:disabled:text-gray-600" id="deployment_name" name="deployment_name" required disabled>
-            <option value="">-- เลือก Namespace ก่อน --</option>
+            <option value="">กำลังโหลด...</option>
         </select>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">เลือก Namespace หรือ Deployment ก่อนก็ได้ — เลือกอย่างใดอย่างหนึ่งแล้วอีกช่องจะปรับตาม</p>
     </div>
 
     <div>
@@ -101,86 +102,49 @@
 </form>
 
 <script>
-document.getElementById('namespace').addEventListener('change', function () {
+enhanceSearchableSelect(document.getElementById('namespace'));
+enhanceSearchableSelect(document.getElementById('deployment_name'));
+enhanceSearchableSelect(document.getElementById('secret_name'));
+
+var namespaceSelect = document.getElementById('namespace');
+var deploymentSelect = document.getElementById('deployment_name');
+var secretSelect = document.getElementById('secret_name');
+var deploymentSpinner = document.getElementById('deployment_spinner');
+
+namespaceSelect.addEventListener('change', function () {
     var ns = this.value;
-    var depSelect = document.getElementById('deployment_name');
-    var spinner = document.getElementById('deployment_spinner');
-    depSelect.disabled = true;
-    depSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
-
     if (!ns) {
-        depSelect.innerHTML = '<option value="">-- เลือก Namespace ก่อน --</option>';
-    } else {
-        spinner.classList.remove('hidden');
-
-        fetch('/ingress/api/deployments?namespace=' + encodeURIComponent(ns))
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                depSelect.innerHTML = '';
-                if (!data.deployments || data.deployments.length === 0) {
-                    depSelect.innerHTML = '<option value="">-- ไม่พบ Deployment --</option>';
-                    return;
-                }
-                var placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = '-- เลือก Deployment --';
-                depSelect.appendChild(placeholder);
-                data.deployments.forEach(function (d) {
-                    var opt = document.createElement('option');
-                    opt.value = d.name;
-                    opt.textContent = d.name + ' (replicas: ' + d.replicas + ')';
-                    depSelect.appendChild(opt);
-                });
-                depSelect.disabled = false;
-            })
-            .catch(function () {
-                depSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
-            })
-            .finally(function () {
-                spinner.classList.add('hidden');
-            });
-    }
-
-    var secretSelect = document.getElementById('secret_name');
-    secretSelect.disabled = true;
-    secretSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
-
-    if (!ns) {
+        loadAllDeployments(deploymentSelect, deploymentSpinner, null, null, false);
+        secretSelect.disabled = true;
         secretSelect.innerHTML = '<option value="">-- เลือก Namespace ก่อน --</option>';
         return;
     }
-
-    // Fallback while listSecrets() is blocked by a cluster RBAC gap (the
-    // dev-ingress-phalcon ServiceAccount lacks get/list on secrets) — the
-    // Ingress itself doesn't need secret-read access, it only stores this
-    // name, so this keeps the form usable until that gap is closed.
-    var FALLBACK_SECRETS = ['advws-tls'];
-
-    fetch('/ingress/api/secrets?namespace=' + encodeURIComponent(ns))
-        .then(function (res) { return res.json(); })
-        .then(function (data) {
-            var secrets = (data.secrets && data.secrets.length > 0) ? data.secrets : FALLBACK_SECRETS;
-            populateSecretSelect(secrets);
-        })
-        .catch(function () {
-            populateSecretSelect(FALLBACK_SECRETS);
-        });
-
-    function populateSecretSelect(names) {
-        secretSelect.innerHTML = '';
-        var placeholder = document.createElement('option');
-        placeholder.value = '';
-        placeholder.textContent = '-- เลือก Secret Name --';
-        secretSelect.appendChild(placeholder);
-        names.forEach(function (name) {
-            var opt = document.createElement('option');
-            opt.value = name;
-            opt.textContent = name;
-            secretSelect.appendChild(opt);
-        });
-        secretSelect.disabled = false;
-    }
+    loadDeploymentsForNamespace(deploymentSelect, deploymentSpinner, ns, null, false);
+    loadSecretsForNamespace(secretSelect, ns, null, false);
 });
+
+// Picking a Deployment before a Namespace: the initial load below shows
+// every Deployment across every namespace, so this reads the namespace back
+// off the chosen <option> and back-fills the Namespace field with it.
+deploymentSelect.addEventListener('change', function () {
+    var opt = this.options[this.selectedIndex];
+    var ns = opt ? opt.dataset.namespace : '';
+    if (!ns || namespaceSelect.value === ns) return;
+
+    namespaceSelect.value = ns;
+    syncSearchableSelectDisplay(namespaceSelect);
+    loadDeploymentsForNamespace(deploymentSelect, deploymentSpinner, ns, this.value, false);
+    loadSecretsForNamespace(secretSelect, ns, null, false);
+});
+
+// nodered's own default container port is 1880, not 80 — auto-fill it
+// whenever that Deployment is picked so the common case needs no manual edit.
+var targetPortInput = document.getElementById('target_port');
+deploymentSelect.addEventListener('change', function () {
+    targetPortInput.value = this.value === 'nodered' ? 1880 : 80;
+});
+
+loadAllDeployments(deploymentSelect, deploymentSpinner, null, null, false);
 
 var ingressFields = document.getElementById('ingress_fields');
 var hostInput = document.getElementById('host');

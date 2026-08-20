@@ -46,7 +46,21 @@ class MockKubernetesService implements KubernetesServiceInterface
 
     public function listDeployments(string $namespace): array
     {
-        return self::DEPLOYMENTS[$namespace] ?? [];
+        return array_map(
+            fn (array $d) => $d + ['namespace' => $namespace],
+            self::DEPLOYMENTS[$namespace] ?? []
+        );
+    }
+
+    public function listAllDeployments(): array
+    {
+        $all = [];
+        foreach (self::DEPLOYMENTS as $namespace => $deployments) {
+            foreach ($deployments as $d) {
+                $all[] = $d + ['namespace' => $namespace];
+            }
+        }
+        return $all;
     }
 
     public function listSecrets(string $namespace): array
