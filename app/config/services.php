@@ -86,10 +86,10 @@ $di->setShared('modelsMetadata', fn () => new MetaDataMemory());
 $di->setShared('flash', function () {
     $flash = new Flash(null, $this->get('session'));
     $flash->setCssClasses([
-        'error'   => "mb-4 flex items-center gap-2 rounded-lg border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-800 before:content-['✕']",
-        'success' => "mb-4 flex items-center gap-2 rounded-lg border-l-4 border-green-500 bg-green-50 px-4 py-3 text-sm text-green-800 before:content-['✓']",
-        'notice'  => "mb-4 flex items-center gap-2 rounded-lg border-l-4 border-blue-500 bg-blue-50 px-4 py-3 text-sm text-blue-800 before:content-['ℹ']",
-        'warning' => "mb-4 flex items-center gap-2 rounded-lg border-l-4 border-yellow-500 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 before:content-['⚠']",
+        'error'   => "mb-4 flex items-center gap-2 rounded-lg border-l-4 border-red-500 bg-red-50 px-4 py-3 text-sm text-red-800 before:content-['✕'] dark:bg-red-500/10 dark:text-red-400",
+        'success' => "mb-4 flex items-center gap-2 rounded-lg border-l-4 border-green-500 bg-green-50 px-4 py-3 text-sm text-green-800 before:content-['✓'] dark:bg-green-500/10 dark:text-green-400",
+        'notice'  => "mb-4 flex items-center gap-2 rounded-lg border-l-4 border-blue-500 bg-blue-50 px-4 py-3 text-sm text-blue-800 before:content-['ℹ'] dark:bg-blue-500/10 dark:text-blue-400",
+        'warning' => "mb-4 flex items-center gap-2 rounded-lg border-l-4 border-yellow-500 bg-yellow-50 px-4 py-3 text-sm text-yellow-800 before:content-['⚠'] dark:bg-yellow-500/10 dark:text-yellow-400",
     ]);
     return $flash;
 });

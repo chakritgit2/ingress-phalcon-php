@@ -1,27 +1,27 @@
 {% extends "layouts/main.volt" %}
 {% block content %}
-<h1 class="mb-6 border-b border-gray-200 pb-4 text-xl font-semibold text-gray-900">แก้ไข Ingress</h1>
+<h1 class="mb-6 border-b border-gray-200 pb-4 text-xl font-semibold text-gray-900 dark:border-gray-800 dark:text-white">แก้ไข Ingress</h1>
 
 <form method="post" action="/ingress/{{ row.id }}/update" class="max-w-md space-y-6">
     <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-gray-700">ประเภท *</label>
-        <div class="inline-flex rounded-lg bg-gray-100 p-1">
-            <label class="cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium text-gray-600 transition has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-sm has-[:checked]:ring-1 has-[:checked]:ring-blue-200">
+        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">ประเภท *</label>
+        <div class="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-gray-800">
+            <label class="cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium text-gray-600 transition has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-sm has-[:checked]:ring-1 has-[:checked]:ring-blue-200 dark:text-gray-400 dark:has-[:checked]:bg-gray-700 dark:has-[:checked]:text-blue-400 dark:has-[:checked]:ring-blue-500/30">
                 <input type="radio" name="request_type" value="nodeport" {{ row.request_type != 'ingress' ? 'checked' : '' }} class="sr-only">
                 NodePort ชั่วคราว
             </label>
-            <label class="cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium text-gray-600 transition has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-sm has-[:checked]:ring-1 has-[:checked]:ring-blue-200">
+            <label class="cursor-pointer rounded-md px-4 py-1.5 text-sm font-medium text-gray-600 transition has-[:checked]:bg-white has-[:checked]:text-blue-700 has-[:checked]:shadow-sm has-[:checked]:ring-1 has-[:checked]:ring-blue-200 dark:text-gray-400 dark:has-[:checked]:bg-gray-700 dark:has-[:checked]:text-blue-400 dark:has-[:checked]:ring-blue-500/30">
                 <input type="radio" name="request_type" value="ingress" {{ row.request_type == 'ingress' ? 'checked' : '' }} class="sr-only">
                 Ingress + TLS
             </label>
         </div>
 
-        <p id="type_desc_nodeport" class="mt-2 {{ row.request_type == 'ingress' ? 'hidden' : '' }} text-xs text-gray-500">เข้าถึงผ่าน <code class="rounded bg-gray-100 px-1 py-0.5 text-[11px]">node_ip:node_port</code> โดยตรง ไม่ต้องมีโดเมนหรือ TLS</p>
-        <p id="type_desc_ingress" class="mt-2 {{ row.request_type != 'ingress' ? 'hidden' : '' }} text-xs text-gray-500">เข้าถึงผ่านโดเมนที่กำหนดเอง (HTTPS) ต้องกรอก Host และเลือก TLS Secret</p>
+        <p id="type_desc_nodeport" class="mt-2 {{ row.request_type == 'ingress' ? 'hidden' : '' }} text-xs text-gray-500 dark:text-gray-400">เข้าถึงผ่าน <code class="rounded bg-gray-100 px-1 py-0.5 text-[11px] dark:bg-gray-800">node_ip:node_port</code> โดยตรง ไม่ต้องมีโดเมนหรือ TLS</p>
+        <p id="type_desc_ingress" class="mt-2 {{ row.request_type != 'ingress' ? 'hidden' : '' }} text-xs text-gray-500 dark:text-gray-400">เข้าถึงผ่านโดเมนที่กำหนดเอง (HTTPS) ต้องกรอก Host และเลือก TLS Secret</p>
 
-        <p class="mt-2 flex items-start gap-1.5 text-xs text-gray-500">
+        <p class="mt-2 flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400">
             <svg class="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <circle cx="12" cy="12" r="9"/>
                 <path stroke-linecap="round" d="M12 11v5m0-8h.01"/>
@@ -31,13 +31,13 @@
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-gray-700" for="developer_name">ใคร (Developer Name) *</label>
-        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="text" id="developer_name" name="developer_name" value="{{ row.developer_name }}" required>
+        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="developer_name">ใคร (Developer Name) *</label>
+        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="text" id="developer_name" name="developer_name" value="{{ row.developer_name }}" required>
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-gray-700" for="namespace">ที่ Namespace อะไร *</label>
-        <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" id="namespace" name="namespace" required>
+        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="namespace">ที่ Namespace อะไร *</label>
+        <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" id="namespace" name="namespace" required>
             <option value="">-- เลือก Namespace --</option>
             {% for ns in namespaces %}
             <option value="{{ ns }}" {{ ns == row.namespace ? 'selected' : '' }}>{{ ns }}</option>
@@ -46,46 +46,53 @@
     </div>
 
     <div>
-        <label class="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-700" for="deployment_name">
+        <label class="mb-1.5 flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300" for="deployment_name">
             ใช้อะไร (Deployment) *
             <svg id="deployment_spinner" class="hidden h-3.5 w-3.5 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                 <circle class="opacity-25" cx="12" cy="12" r="9" stroke="currentColor" stroke-width="3"/>
                 <path class="opacity-75" fill="currentColor" d="M21 12a9 9 0 0 0-9-9V0c6.627 0 12 5.373 12 12h-3z"/>
             </svg>
         </label>
-        <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400" id="deployment_name" name="deployment_name" required disabled>
+        <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900 dark:disabled:text-gray-600" id="deployment_name" name="deployment_name" required disabled>
             <option value="{{ row.deployment_name }}">{{ row.deployment_name }}</option>
         </select>
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-gray-700" for="target_port">Port</label>
-        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="number" id="target_port" name="target_port" value="{{ row.target_port }}" min="1" max="65535" required>
+        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="target_port">Port</label>
+        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="number" id="target_port" name="target_port" value="{{ row.target_port }}" min="1" max="65535" required>
     </div>
 
-    <div id="ingress_fields" class="{{ row.request_type != 'ingress' ? 'hidden' : '' }} space-y-5 border-l-2 border-blue-200 pl-4">
+    <div id="ingress_fields" class="{{ row.request_type != 'ingress' ? 'hidden' : '' }} space-y-5 border-l-2 border-blue-200 pl-4 dark:border-blue-500/30">
         <div>
-            <label class="mb-1.5 block text-sm font-medium text-gray-700" for="host">Host (โดเมน) *</label>
-            <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="text" id="host" name="host" value="{{ row.host }}" placeholder="myapp.advws.com" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*" title="ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)" {{ row.request_type == 'ingress' ? 'required' : '' }}>
-            <p class="mt-1 text-xs text-gray-500">ใส่แค่ชื่อโดเมนเปล่าๆ เช่น myapp.advws.com — ห้ามมี http:// หรือ / ต่อท้าย</p>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="host">Host (โดเมน) *</label>
+            <div class="flex gap-2">
+                <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="text" id="host" name="host" value="{{ row.host }}" placeholder="myapp.advws.com" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*" title="ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)" {{ row.request_type == 'ingress' ? 'required' : '' }}>
+                <button type="button" id="genHostUuidBtn" title="สุ่ม UUID ใส่ Host" class="inline-flex shrink-0 cursor-pointer items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0 1 14.5-4.5M20 15a8 8 0 0 1-14.5 4.5"/>
+                    </svg>
+                </button>
+            </div>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ใส่แค่ชื่อโดเมนเปล่าๆ เช่น myapp.advws.com — ห้ามมี http:// หรือ / ต่อท้าย</p>
         </div>
 
         <div>
-            <label class="mb-1.5 block text-sm font-medium text-gray-700" for="secret_name">Secret Name (TLS) *</label>
-            <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400" id="secret_name" name="secret_name" disabled {{ row.request_type == 'ingress' ? 'required' : '' }}>
+            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="secret_name">Secret Name (TLS) *</label>
+            <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900 dark:disabled:text-gray-600" id="secret_name" name="secret_name" disabled {{ row.request_type == 'ingress' ? 'required' : '' }}>
                 <option value="{{ row.secret_name }}">{{ row.secret_name }}</option>
             </select>
         </div>
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-gray-700" for="schedule_end_minutes">Schedule End (นาที) *</label>
-        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" type="number" id="schedule_end_minutes" name="schedule_end_minutes" value="{{ row.schedule_end_minutes }}" min="1" max="10080" required>
+        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="schedule_end_minutes">Schedule End (นาที) *</label>
+        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="number" id="schedule_end_minutes" name="schedule_end_minutes" value="{{ row.schedule_end_minutes }}" min="1" max="10080" required>
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-gray-700" for="note">หมายเหตุ (ถ้ามี)</label>
-        <textarea class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" id="note" name="note" rows="2" maxlength="255" placeholder="เหตุผลที่ขอ เช่น ทดสอบ feature X ให้ทีม QA">{{ row.note|e }}</textarea>
+        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="note">หมายเหตุ (ถ้ามี)</label>
+        <textarea class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" id="note" name="note" rows="2" maxlength="255" placeholder="เหตุผลที่ขอ เช่น ทดสอบ feature X ให้ทีม QA">{{ row.note|e }}</textarea>
     </div>
 
     <div class="pt-2">
@@ -214,5 +221,21 @@ var initialNamespace = document.getElementById('namespace').value;
 if (initialNamespace) {
     loadNamespaceOptions(initialNamespace, PRESELECT_DEPLOYMENT, PRESELECT_SECRET, true);
 }
+
+function generateUuidV4() {
+    if (window.crypto && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    var bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    var hex = Array.prototype.map.call(bytes, function (b) { return b.toString(16).padStart(2, '0'); }).join('');
+    return hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+}
+
+document.getElementById('genHostUuidBtn').addEventListener('click', function () {
+    hostInput.value = generateUuidV4() + '.advws.com';
+});
 </script>
 {% endblock %}

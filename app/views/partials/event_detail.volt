@@ -17,5 +17,5 @@
 {% elseif detail['request_type'] is defined %}
     {{ detail['request_type']|e }}{% if detail['target_port'] is defined %} &middot; port {{ detail['target_port'] }}{% endif %}{% if detail['host'] is defined and detail['host'] %} &middot; host: {{ detail['host']|e }}{% endif %}{% if detail['note'] is defined and detail['note'] %} &middot; หมายเหตุ: {{ detail['note']|e }}{% endif %}
 {% else %}
-    <span class="text-gray-300">-</span>
+    <span class="text-gray-300 dark:text-gray-600">-</span>
 {% endif %}
