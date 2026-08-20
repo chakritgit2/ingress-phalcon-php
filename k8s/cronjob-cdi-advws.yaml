@@ -1,0 +1,57 @@
+# Matches the live `ingress-phalcon-php` Deployment in namespace cdi-advws
+# (see: kubectl get deployment -n cdi-advws ingress-phalcon-php -o yaml) —
+# NOT the ingress-selfservice/* templates elsewhere in this k8s/ folder,
+# which describe a differently-named deployment that isn't what's actually
+# running. This CronJob was missing entirely from the cluster, which is why
+# k8s_commands rows sat in status='pending' forever regardless of the
+# BOT_ENABLED DB toggle: nothing was ever invoking
+# `php app/console.php kubernetes processCommands`.
+#
+# Apply with:
+#   kubectl apply -f k8s/secret-cdi-advws.yaml   (copy from the .example first)
+#   kubectl apply -f k8s/cronjob-cdi-advws.yaml
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: ingress-phalcon-php-sweeper
+  namespace: cdi-advws
+spec:
+  schedule: "*/1 * * * *"
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          serviceAccountName: ingress-phalcon-php
+          restartPolicy: OnFailure
+          imagePullSecrets:
+            - name: dockersecret
+          nodeSelector:
+            kubernetes.io/hostname: kube-database1
+          containers:
+            - name: sweeper
+              image: cr.advws.com/ingress-advws:e3a8a31
+              # ; not && — pruneExpired must still run even if processCommands
+              # fails outright, so expiry doesn't silently stop working too.
+              command: ["sh", "-c", "php app/console.php kubernetes processCommands; php app/console.php kubernetes pruneExpired"]
+              env:
+                - name: DB_HOST
+                  value: mariadb.cdi-advws
+                - name: DB_NAME
+                  value: ingress
+                - name: DB_USER
+                  value: ingress
+                - name: DB_PASS
+                  valueFrom:
+                    secretKeyRef:
+                      name: ingress-phalcon-php-secrets
+                      key: DB_PASS
+                - name: APP_ENV
+                  value: local
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  cpu: 250m
+                  memory: 128Mi

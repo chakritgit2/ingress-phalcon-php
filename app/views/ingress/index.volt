@@ -202,29 +202,85 @@
 
 {% if currentUser.isDevops() %}
 <script>
-var selectAll = document.getElementById('bulkSelectAll');
-var rowCheckboxes = Array.prototype.slice.call(document.querySelectorAll('.bulkRowCheckbox'));
-var countLabel = document.getElementById('bulkSelectedCount');
-var deleteBtn = document.getElementById('bulkDeleteBtn');
-var retryBtn = document.getElementById('bulkRetryBtn');
+// Re-run after each live-refresh (see the EventSource block below), since
+// swapping <tbody> innerHTML replaces these checkboxes and drops listeners
+// bound to the old ones.
+function initBulkControls() {
+    var selectAll = document.getElementById('bulkSelectAll');
+    var rowCheckboxes = Array.prototype.slice.call(document.querySelectorAll('.bulkRowCheckbox'));
+    var countLabel = document.getElementById('bulkSelectedCount');
+    var deleteBtn = document.getElementById('bulkDeleteBtn');
+    var retryBtn = document.getElementById('bulkRetryBtn');
 
-function updateBulkState() {
-    var checked = rowCheckboxes.filter(function (cb) { return cb.checked; });
-    countLabel.textContent = 'เลือกแล้ว ' + checked.length + ' รายการ';
-    deleteBtn.disabled = checked.length === 0;
-    retryBtn.disabled = checked.length === 0;
-}
+    function updateBulkState() {
+        var checked = rowCheckboxes.filter(function (cb) { return cb.checked; });
+        countLabel.textContent = 'เลือกแล้ว ' + checked.length + ' รายการ';
+        deleteBtn.disabled = checked.length === 0;
+        retryBtn.disabled = checked.length === 0;
+    }
 
-if (selectAll) {
-    selectAll.addEventListener('change', function () {
-        rowCheckboxes.forEach(function (cb) { cb.checked = selectAll.checked; });
-        updateBulkState();
+    if (selectAll) {
+        selectAll.addEventListener('change', function () {
+            rowCheckboxes.forEach(function (cb) { cb.checked = selectAll.checked; });
+            updateBulkState();
+        });
+    }
+
+    rowCheckboxes.forEach(function (cb) {
+        cb.addEventListener('change', updateBulkState);
     });
+
+    updateBulkState();
 }
 
-rowCheckboxes.forEach(function (cb) {
-    cb.addEventListener('change', updateBulkState);
-});
+initBulkControls();
 </script>
 {% endif %}
+
+<script>
+// Live status updates: the /ingress table doesn't otherwise reflect status
+// changes (pending -> active/failed, active -> expired/deleted) until the
+// page is manually reloaded. See app/controllers/EventsController.php.
+(function () {
+    var tbody = document.querySelector('table tbody');
+    if (!tbody || typeof EventSource === 'undefined') {
+        return;
+    }
+
+    var refreshing = false;
+
+    function refresh() {
+        if (refreshing) {
+            return;
+        }
+        refreshing = true;
+
+        var checkedIds = Array.prototype.slice.call(document.querySelectorAll('.bulkRowCheckbox:checked'))
+            .map(function (cb) { return cb.value; });
+
+        fetch(window.location.href)
+            .then(function (res) { return res.text(); })
+            .then(function (html) {
+                var newTbody = new DOMParser().parseFromString(html, 'text/html').querySelector('table tbody');
+                if (!newTbody) {
+                    return;
+                }
+                tbody.innerHTML = newTbody.innerHTML;
+                checkedIds.forEach(function (id) {
+                    var cb = tbody.querySelector('.bulkRowCheckbox[value="' + id + '"]');
+                    if (cb) {
+                        cb.checked = true;
+                    }
+                });
+                if (typeof initBulkControls === 'function') {
+                    initBulkControls();
+                }
+            })
+            .catch(function () {})
+            .finally(function () { refreshing = false; });
+    }
+
+    new EventSource('/events/stream?channel=ingress').addEventListener('update', refresh);
+})();
+</script>
 {% endblock %}
