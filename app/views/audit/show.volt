@@ -6,15 +6,15 @@
 <div class="max-w-2xl overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
     <table class="w-full border-collapse text-sm">
         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ใคร</th><td class="px-4 py-3 text-gray-800">{{ row.developer_name }}</td></tr>
-            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ใช้อะไร</th><td class="px-4 py-3 text-gray-800">{{ row.deployment_name }}</td></tr>
-            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ที่ Namespace อะไร</th><td class="px-4 py-3 text-gray-800">{{ row.namespace }}</td></tr>
-            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ออกที่ไหน</th><td class="px-4 py-3 text-gray-800">{{ row.node_ip }}:{{ row.node_port }}</td></tr>
-            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">เมื่อไหร</th><td class="px-4 py-3 text-gray-800">{{ row.created_at }}</td></tr>
-            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">กำหนดหมดอายุ</th><td class="px-4 py-3 text-gray-800">{{ row.expires_at }}</td></tr>
+            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ใคร</th><td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.developer_name }}</td></tr>
+            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ใช้อะไร</th><td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.deployment_name }}</td></tr>
+            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ที่ Namespace อะไร</th><td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.namespace }}</td></tr>
+            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ออกที่ไหน</th><td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.node_ip }}:{{ row.node_port }}</td></tr>
+            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">เมื่อไหร</th><td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.created_at }}</td></tr>
+            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">กำหนดหมดอายุ</th><td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.expires_at }}</td></tr>
             <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">สถานะ</th><td class="px-4 py-3">{% include "partials/badge" with ["status": row.status] %}</td></tr>
             {% if row.deleted_at %}
-            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ลบจริงเมื่อ</th><td class="px-4 py-3 text-gray-800">{{ row.deleted_at }} ({{ row.deleted_by }})</td></tr>
+            <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">ลบจริงเมื่อ</th><td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.deleted_at }} ({{ row.deleted_by }})</td></tr>
             {% endif %}
             {% if row.last_error %}
             <tr><th class="w-56 bg-gray-50 px-4 py-3 text-left text-sm font-medium text-gray-600 dark:bg-gray-900 dark:text-gray-400">Error ล่าสุด</th><td class="px-4 py-3 text-red-700 dark:text-red-400">{{ row.last_error }}</td></tr>
