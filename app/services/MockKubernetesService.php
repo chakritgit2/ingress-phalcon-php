@@ -47,7 +47,7 @@ class MockKubernetesService implements KubernetesServiceInterface
     public function listDeployments(string $namespace): array
     {
         return array_map(
-            fn (array $d) => $d + ['namespace' => $namespace],
+            fn (array $d) => $this->withContainerNames($d, $namespace),
             self::DEPLOYMENTS[$namespace] ?? []
         );
     }
@@ -57,10 +57,22 @@ class MockKubernetesService implements KubernetesServiceInterface
         $all = [];
         foreach (self::DEPLOYMENTS as $namespace => $deployments) {
             foreach ($deployments as $d) {
-                $all[] = $d + ['namespace' => $namespace];
+                $all[] = $this->withContainerNames($d, $namespace);
             }
         }
         return $all;
+    }
+
+    /**
+     * Mirrors KubernetesService::extractContainerNames() — a mock entry's
+     * container name(s) default to its own 'name' (no real pod spec to read
+     * here), but can be overridden per entry via a 'containers' key when a
+     * mock needs to demo a Deployment name that differs from what's actually
+     * running in it (see the doc on listDeployments() in the interface).
+     */
+    private function withContainerNames(array $d, string $namespace): array
+    {
+        return $d + ['namespace' => $namespace, 'container_names' => $d['containers'] ?? [$d['name']]];
     }
 
     public function listSecrets(string $namespace): array

@@ -231,6 +231,11 @@
             var opt = document.createElement('option');
             opt.value = d.name;
             opt.dataset.namespace = d.namespace || '';
+            // The Deployment's own name (d.name) is an arbitrary label —
+            // what's actually running is identified by its pod spec's
+            // container name(s), so that's what callers like the nodered
+            // default-port logic key off, not d.name.
+            opt.dataset.nodered = (d.container_names || []).indexOf('nodered') !== -1 ? '1' : '';
             opt.textContent = showNamespace
                 ? d.name + ' — ns: ' + d.namespace + ' (replicas: ' + d.replicas + ')'
                 : d.name + ' (replicas: ' + d.replicas + ')';
