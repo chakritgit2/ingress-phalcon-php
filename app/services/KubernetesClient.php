@@ -52,6 +52,17 @@ class KubernetesClient
     }
 
     /**
+     * $ops is a JSON Patch document (RFC 6902) — a list of {op, path, value}
+     * operations — sent with the content type the Kubernetes API requires
+     * for it, since the default `application/json` used by post()/delete()
+     * only works for full-resource bodies, not patches.
+     */
+    public function patch(string $path, array $ops): array
+    {
+        return $this->request('PATCH', $path, $ops, 'application/json-patch+json');
+    }
+
+    /**
      * The method/path/body of every mutating (POST/DELETE) request this
      * client has attempted to send since the last resetRequestLog() call,
      * in call order — recorded *before* each HTTP call, so an entry is
@@ -70,14 +81,20 @@ class KubernetesClient
         $this->requestLog = [];
     }
 
-    private function request(string $method, string $path, ?array $body = null): array
+    private function request(string $method, string $path, ?array $body = null, ?string $contentType = null): array
     {
         if ($method !== 'GET') {
             $this->requestLog[] = ['method' => $method, 'path' => $path, 'body' => $body];
         }
 
         try {
-            $options = $body !== null ? ['json' => $body] : [];
+            if ($body === null) {
+                $options = [];
+            } elseif ($contentType !== null) {
+                $options = ['headers' => ['Content-Type' => $contentType], 'body' => json_encode($body)];
+            } else {
+                $options = ['json' => $body];
+            }
             $response = $this->http->request($method, $path, $options);
             $contents = (string) $response->getBody();
             return $contents !== '' ? json_decode($contents, true) : [];

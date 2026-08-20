@@ -1,0 +1,27 @@
+ALTER TABLE audit_log
+    MODIFY COLUMN event_type ENUM(
+        'login',
+        'login_rejected',
+        'ingress_requested',
+        'ingress_delete_requested',
+        'ingress_retry_requested',
+        'ingress_create',
+        'ingress_create_failed',
+        'ingress_delete',
+        'ingress_delete_failed',
+        'ingress_updated',
+        'bot_enabled',
+        'bot_disabled',
+        'preview_payload_failed',
+        'user_role_changed',
+        'user_activated',
+        'user_deactivated',
+        'user_password_reset',
+        'user_email_changed',
+        'node_admin_path_patched',
+        'node_admin_path_not_found',
+        'node_admin_path_patch_failed',
+        'node_admin_path_reverted',
+        'node_admin_path_revert_not_found',
+        'node_admin_path_revert_failed'
+    ) NOT NULL;
