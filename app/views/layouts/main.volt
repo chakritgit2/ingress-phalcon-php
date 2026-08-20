@@ -11,6 +11,308 @@
     })();
     </script>
     <link rel="stylesheet" href="{{ url.get('css/app.css') }}">
+    <script>
+    function enhanceSearchableSelect(select) {
+        if (!select || select.dataset.searchableInit === '1') return;
+        select.dataset.searchableInit = '1';
+
+        var originalClassName = select.className;
+
+        var wrapper = document.createElement('div');
+        wrapper.className = 'relative';
+        select.parentNode.insertBefore(wrapper, select);
+        wrapper.appendChild(select);
+        select.classList.add('sr-only');
+        select.tabIndex = -1;
+
+        var input = document.createElement('input');
+        input.type = 'text';
+        input.autocomplete = 'off';
+        input.className = originalClassName + ' pr-16';
+        wrapper.insertBefore(input, select);
+
+        var clearBtn = document.createElement('button');
+        clearBtn.type = 'button';
+        clearBtn.tabIndex = -1;
+        clearBtn.setAttribute('aria-label', 'ล้างค่า');
+        clearBtn.className = 'absolute right-8 top-1/2 hidden -translate-y-1/2 rounded p-0.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-700 dark:hover:text-gray-300';
+        clearBtn.innerHTML = '<svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/></svg>';
+        wrapper.insertBefore(clearBtn, select);
+
+        var chevron = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        chevron.setAttribute('class', 'pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400');
+        chevron.setAttribute('fill', 'none');
+        chevron.setAttribute('viewBox', '0 0 24 24');
+        chevron.setAttribute('stroke', 'currentColor');
+        chevron.setAttribute('stroke-width', '2');
+        chevron.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="m6 9 6 6 6-6"/>';
+        wrapper.insertBefore(chevron, select);
+
+        var list = document.createElement('div');
+        list.className = 'absolute z-20 mt-1 hidden max-h-56 w-full overflow-auto rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-lg dark:border-gray-700 dark:bg-gray-800';
+        wrapper.appendChild(list);
+
+        var activeIndex = -1;
+
+        function optionRows() {
+            return Array.prototype.filter.call(select.options, function (opt) { return opt.value !== ''; });
+        }
+
+        function syncFromSelect() {
+            input.disabled = select.disabled;
+            var opt = select.options[select.selectedIndex];
+            var hasValue = !!opt && opt.value !== '';
+            if (!hasValue) {
+                input.value = '';
+                input.placeholder = opt ? opt.textContent : '';
+            } else {
+                input.value = opt.textContent;
+            }
+            clearBtn.classList.toggle('hidden', !hasValue || select.disabled);
+        }
+
+        function closeList() {
+            list.classList.add('hidden');
+            activeIndex = -1;
+        }
+
+        function highlight(idx) {
+            activeIndex = idx;
+            Array.prototype.forEach.call(list.children, function (child, i) {
+                child.classList.toggle('bg-blue-50', i === idx);
+                child.classList.toggle('dark:bg-gray-700', i === idx);
+            });
+        }
+
+        function selectOption(opt) {
+            // Not select.value = opt.value: Deployment names can repeat
+            // across namespaces (e.g. "checkout-api" in both qa and
+            // production), so multiple <option>s can share the same value.
+            // Setting .value would ambiguously resolve to whichever matching
+            // option comes first in the DOM, not the one actually clicked.
+            // Selecting the exact <option> node is unambiguous.
+            opt.selected = true;
+            closeList();
+            syncFromSelect();
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        function renderList(filter) {
+            list.innerHTML = '';
+            var q = (filter || '').trim().toLowerCase();
+            var rows = optionRows().filter(function (opt) {
+                return !q || opt.textContent.toLowerCase().indexOf(q) !== -1;
+            });
+
+            if (rows.length === 0) {
+                var empty = document.createElement('div');
+                empty.className = 'px-3 py-2 text-gray-400';
+                empty.textContent = 'ไม่พบรายการ';
+                list.appendChild(empty);
+                return;
+            }
+
+            rows.forEach(function (opt) {
+                var item = document.createElement('div');
+                item.className = 'cursor-pointer px-3 py-2 hover:bg-blue-50 dark:hover:bg-gray-700';
+                item.textContent = opt.textContent;
+                item.addEventListener('mousedown', function (e) {
+                    e.preventDefault();
+                    selectOption(opt);
+                });
+                list.appendChild(item);
+            });
+            highlight(-1);
+        }
+
+        function openList() {
+            if (select.disabled) return;
+            renderList('');
+            list.classList.remove('hidden');
+        }
+
+        function clearValue() {
+            if (select.disabled) return;
+            var placeholderOpt = Array.prototype.find.call(select.options, function (o) { return o.value === ''; });
+            if (placeholderOpt) {
+                placeholderOpt.selected = true;
+            } else {
+                select.selectedIndex = -1;
+            }
+            syncFromSelect();
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+            openList();
+        }
+
+        // mousedown + preventDefault (not 'click'): keeps focus on the text
+        // input instead of triggering its blur handler first, so clearing
+        // and immediately reopening the list happens in one uninterrupted step.
+        clearBtn.addEventListener('mousedown', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            clearValue();
+        });
+
+        input.addEventListener('focus', function () {
+            input.select();
+            openList();
+        });
+        input.addEventListener('input', function () {
+            renderList(input.value);
+            list.classList.remove('hidden');
+        });
+        input.addEventListener('blur', function () {
+            setTimeout(function () {
+                syncFromSelect();
+                closeList();
+            }, 150);
+        });
+        input.addEventListener('keydown', function (e) {
+            var rows = list.children;
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (list.classList.contains('hidden')) { openList(); return; }
+                highlight(Math.min(activeIndex + 1, rows.length - 1));
+                if (rows[activeIndex]) rows[activeIndex].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                highlight(Math.max(activeIndex - 1, 0));
+                if (rows[activeIndex]) rows[activeIndex].scrollIntoView({ block: 'nearest' });
+            } else if (e.key === 'Enter') {
+                e.preventDefault();
+                var q = input.value.trim().toLowerCase();
+                var matches = optionRows().filter(function (o) {
+                    return !q || o.textContent.toLowerCase().indexOf(q) !== -1;
+                });
+                var opt = matches[activeIndex >= 0 ? activeIndex : 0];
+                if (opt) selectOption(opt);
+            } else if (e.key === 'Escape') {
+                syncFromSelect();
+                closeList();
+            }
+        });
+
+        var mo = new MutationObserver(syncFromSelect);
+        mo.observe(select, { attributes: true, attributeFilter: ['disabled'], childList: true });
+
+        syncFromSelect();
+
+        // Exposed so code elsewhere can refresh this select's visible text
+        // after setting select.value programmatically (e.g. auto-filling
+        // Namespace from a picked Deployment) — plain property/value
+        // assignment fires neither the 'change' event nor a DOM mutation,
+        // so the MutationObserver above never sees it on its own.
+        select._syncSearchableSelect = syncFromSelect;
+    }
+
+    function syncSearchableSelectDisplay(select) {
+        if (select && select._syncSearchableSelect) select._syncSearchableSelect();
+    }
+
+    function fetchJson(url) {
+        return fetch(url).then(function (res) { return res.json(); });
+    }
+
+    // showNamespace=true labels each option with its namespace (used for the
+    // cross-namespace "all deployments" list); preselectNamespace disambiguates
+    // same-named deployments in different namespaces when preselecting.
+    function populateDeploymentSelect(depSelect, deployments, preselectName, preselectNamespace, showNamespace) {
+        depSelect.innerHTML = '';
+        if (!deployments || deployments.length === 0) {
+            depSelect.innerHTML = '<option value="">-- ไม่พบ Deployment --</option>';
+            depSelect.disabled = false;
+            return;
+        }
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '-- เลือก Deployment --';
+        depSelect.appendChild(placeholder);
+        deployments.forEach(function (d) {
+            var opt = document.createElement('option');
+            opt.value = d.name;
+            opt.dataset.namespace = d.namespace || '';
+            opt.textContent = showNamespace
+                ? d.name + ' — ns: ' + d.namespace + ' (replicas: ' + d.replicas + ')'
+                : d.name + ' (replicas: ' + d.replicas + ')';
+            if (preselectName && d.name === preselectName && (!preselectNamespace || d.namespace === preselectNamespace)) {
+                opt.selected = true;
+            }
+            depSelect.appendChild(opt);
+        });
+        depSelect.disabled = false;
+    }
+
+    function populateSecretSelect(secretSelect, names, preselectName) {
+        secretSelect.innerHTML = '';
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '-- เลือก Secret Name --';
+        secretSelect.appendChild(placeholder);
+        names.forEach(function (name) {
+            var opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            if (preselectName && name === preselectName) opt.selected = true;
+            secretSelect.appendChild(opt);
+        });
+        secretSelect.disabled = false;
+    }
+
+    function loadDeploymentsForNamespace(depSelect, spinner, namespace, preselectName, silent) {
+        if (!silent) {
+            depSelect.disabled = true;
+            depSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+        }
+        if (spinner) spinner.classList.remove('hidden');
+
+        return fetchJson('/ingress/api/deployments?namespace=' + encodeURIComponent(namespace))
+            .then(function (data) {
+                populateDeploymentSelect(depSelect, data.deployments, preselectName, namespace, false);
+            })
+            .catch(function () {
+                if (!silent) depSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
+            })
+            .finally(function () {
+                if (spinner) spinner.classList.add('hidden');
+            });
+    }
+
+    function loadAllDeployments(depSelect, spinner, preselectName, preselectNamespace, silent) {
+        if (!silent) {
+            depSelect.disabled = true;
+            depSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+        }
+        if (spinner) spinner.classList.remove('hidden');
+
+        return fetchJson('/ingress/api/deployments')
+            .then(function (data) {
+                populateDeploymentSelect(depSelect, data.deployments, preselectName, preselectNamespace, true);
+            })
+            .catch(function () {
+                if (!silent) depSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
+            })
+            .finally(function () {
+                if (spinner) spinner.classList.add('hidden');
+            });
+    }
+
+    function loadSecretsForNamespace(secretSelect, namespace, preselectName, silent) {
+        var FALLBACK_SECRETS = ['advws-tls'];
+        if (!silent) {
+            secretSelect.disabled = true;
+            secretSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+        }
+
+        return fetchJson('/ingress/api/secrets?namespace=' + encodeURIComponent(namespace))
+            .then(function (data) {
+                var secrets = (data.secrets && data.secrets.length > 0) ? data.secrets : FALLBACK_SECRETS;
+                populateSecretSelect(secretSelect, secrets, preselectName);
+            })
+            .catch(function () {
+                populateSecretSelect(secretSelect, FALLBACK_SECRETS, preselectName);
+            });
+    }
+    </script>
 </head>
 <body class="min-h-screen bg-gray-50 font-sans text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100">
 <header class="sticky top-0 z-10 flex items-center justify-between bg-gray-900 px-6 py-4 shadow-md">

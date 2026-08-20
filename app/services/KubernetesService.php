@@ -39,6 +39,21 @@ class KubernetesService implements KubernetesServiceInterface
         return array_map(
             fn (array $item) => [
                 'name' => $item['metadata']['name'],
+                'namespace' => $namespace,
+                'replicas' => $item['spec']['replicas'] ?? 0,
+            ],
+            $result['items'] ?? []
+        );
+    }
+
+    public function listAllDeployments(): array
+    {
+        $result = $this->client->get('/apis/apps/v1/deployments');
+
+        return array_map(
+            fn (array $item) => [
+                'name' => $item['metadata']['name'],
+                'namespace' => $item['metadata']['namespace'],
                 'replicas' => $item['spec']['replicas'] ?? 0,
             ],
             $result['items'] ?? []

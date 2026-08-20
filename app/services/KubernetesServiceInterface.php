@@ -14,6 +14,15 @@ interface KubernetesServiceInterface
     public function listDeployments(string $namespace): array;
 
     /**
+     * Same shape as listDeployments() but across every namespace at once —
+     * each item additionally carries its 'namespace' key. Lets the
+     * create/edit form's Deployment picker be usable before a Namespace is
+     * chosen (see clusterrole.yaml: deployments list/get is already
+     * cluster-wide, so this needs no extra RBAC).
+     */
+    public function listAllDeployments(): array;
+
+    /**
      * TLS-typed Secret names available in the namespace, for populating the
      * secretName choices on the Ingress+TLS create form.
      *
