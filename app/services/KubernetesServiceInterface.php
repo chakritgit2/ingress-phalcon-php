@@ -11,6 +11,13 @@ interface KubernetesServiceInterface
 {
     public function listNamespaces(): array;
 
+    /**
+     * Each item also carries 'container_names' (the pod spec's container
+     * name(s), not the Deployment's own metadata.name) — a Deployment can be
+     * named anything while running e.g. a "nodered" container, so callers
+     * that need to recognize what's actually running must match against
+     * container_names, not the Deployment name itself.
+     */
     public function listDeployments(string $namespace): array;
 
     /**

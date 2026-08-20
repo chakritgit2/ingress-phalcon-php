@@ -41,6 +41,7 @@ class KubernetesService implements KubernetesServiceInterface
                 'name' => $item['metadata']['name'],
                 'namespace' => $namespace,
                 'replicas' => $item['spec']['replicas'] ?? 0,
+                'container_names' => $this->extractContainerNames($item),
             ],
             $result['items'] ?? []
         );
@@ -55,9 +56,27 @@ class KubernetesService implements KubernetesServiceInterface
                 'name' => $item['metadata']['name'],
                 'namespace' => $item['metadata']['namespace'],
                 'replicas' => $item['spec']['replicas'] ?? 0,
+                'container_names' => $this->extractContainerNames($item),
             ],
             $result['items'] ?? []
         );
+    }
+
+    /**
+     * The Deployment's own metadata.name is an arbitrary label chosen per
+     * app and tells you nothing about what's actually running in it — two
+     * unrelated apps can share a name, and the same logical service (e.g.
+     * "nodered") can be deployed under any Deployment name. The pod spec's
+     * container name(s) are what actually identify the running image, so
+     * that's what callers (e.g. the nodered default-port picker) should
+     * match against instead of $item['metadata']['name'].
+     *
+     * @return string[]
+     */
+    private function extractContainerNames(array $item): array
+    {
+        $containers = $item['spec']['template']['spec']['containers'] ?? [];
+        return array_map(fn (array $c) => $c['name'] ?? '', $containers);
     }
 
     public function getDeployment(string $namespace, string $name): ?array

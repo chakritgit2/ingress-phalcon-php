@@ -138,10 +138,13 @@ deploymentSelect.addEventListener('change', function () {
 });
 
 // nodered's own default container port is 1880, not 80 — auto-fill it
-// whenever that Deployment is picked so the common case needs no manual edit.
+// whenever a Deployment running a "nodered" container is picked. Checked via
+// the pod spec's container name (opt.dataset.nodered), not the Deployment's
+// own name — the Deployment can be named anything.
 var targetPortInput = document.getElementById('target_port');
 deploymentSelect.addEventListener('change', function () {
-    targetPortInput.value = this.value === 'nodered' ? 1880 : 80;
+    var opt = this.options[this.selectedIndex];
+    targetPortInput.value = (opt && opt.dataset.nodered === '1') ? 1880 : 80;
 });
 
 loadAllDeployments(deploymentSelect, deploymentSpinner, null, null, false);
