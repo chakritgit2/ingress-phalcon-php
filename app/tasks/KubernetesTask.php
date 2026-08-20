@@ -87,6 +87,44 @@ class KubernetesTask extends Task
                         'node_ip' => $row->node_ip,
                         'detail' => ['host' => $row->host, 'secret_name' => $row->secret_name],
                     ]);
+
+                    // Notifies (via the audit trail — this app has no
+                    // email/Slack channel) whenever the target Deployment
+                    // has no NODE_ADMIN_PATH env var to patch, or a patch
+                    // attempt failed (e.g. missing RBAC) — the latter never
+                    // fails the ingress_create itself, see
+                    // KubernetesService::syncNodeAdminPathEnv(). Nothing
+                    // extra is logged when it was already correct — no
+                    // change happened.
+                    if ($created['node_admin_path']['found'] === false) {
+                        $this->auditLogService->log('node_admin_path_not_found', $actorLabel, [
+                            'ingress_request_id' => $row->id,
+                            'actor_user_id' => $command->requested_by_user_id,
+                            'namespace' => $row->namespace,
+                            'deployment_name' => $row->deployment_name,
+                            'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
+                        ]);
+                    } elseif (isset($created['node_admin_path']['error'])) {
+                        $this->auditLogService->log('node_admin_path_patch_failed', $actorLabel, [
+                            'ingress_request_id' => $row->id,
+                            'actor_user_id' => $command->requested_by_user_id,
+                            'namespace' => $row->namespace,
+                            'deployment_name' => $row->deployment_name,
+                            'detail' => [
+                                'namespace' => $row->namespace,
+                                'deployment_name' => $row->deployment_name,
+                                'error' => $created['node_admin_path']['error'],
+                            ],
+                        ]);
+                    } elseif ($created['node_admin_path']['patched'] === true) {
+                        $this->auditLogService->log('node_admin_path_patched', $actorLabel, [
+                            'ingress_request_id' => $row->id,
+                            'actor_user_id' => $command->requested_by_user_id,
+                            'namespace' => $row->namespace,
+                            'deployment_name' => $row->deployment_name,
+                            'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
+                        ]);
+                    }
                 } else {
                     if ($row->request_type === 'ingress') {
                         $this->kubernetesService->deleteIngress($row->namespace, $row->ingress_name, $row->service_name);
@@ -108,6 +146,8 @@ class KubernetesTask extends Task
                         'node_ip' => $row->node_ip,
                         'detail' => ['host' => $row->host, 'secret_name' => $row->secret_name],
                     ]);
+
+                    $this->revertNodeAdminPathEnvIfUnused($row, $actorLabel, $command->requested_by_user_id);
                 }
 
                 $command->status = 'success';
@@ -207,6 +247,8 @@ class KubernetesTask extends Task
                     'node_ip' => $row->node_ip,
                 ]);
 
+                $this->revertNodeAdminPathEnvIfUnused($row, 'system:sweeper');
+
                 echo "expired  {$row->namespace}/{$row->service_name} (id={$row->id})\n";
             } catch (KubernetesApiException $e) {
                 $row->last_error = $e->getMessage();
@@ -224,5 +266,58 @@ class KubernetesTask extends Task
         }
 
         echo "processed {$count} expired row(s)\n";
+    }
+
+    /**
+     * Called right after a `delete` (manual or expiry-sweeper) succeeds, to
+     * put NODE_ADMIN_PATH back to its original value on $row's Deployment —
+     * counterpart to the patch createIngress()/createNodePortService() apply
+     * on create. Skips entirely (no revert, no log) if another `active`
+     * request still targets the same namespace+deployment: that Deployment's
+     * NODE_ADMIN_PATH is still genuinely in use, reverting it here would
+     * break that other request out from under it.
+     */
+    private function revertNodeAdminPathEnvIfUnused(IngressRequests $row, string $actorLabel, ?int $actorUserId = null): void
+    {
+        $stillInUse = IngressRequests::count([
+            'conditions' => 'namespace = :namespace: AND deployment_name = :deployment_name: AND status = :status: AND id != :id:',
+            'bind' => [
+                'namespace' => $row->namespace,
+                'deployment_name' => $row->deployment_name,
+                'status' => 'active',
+                'id' => $row->id,
+            ],
+        ]) > 0;
+
+        if ($stillInUse) {
+            return;
+        }
+
+        $reverted = $this->kubernetesService->revertNodeAdminPathEnv($row->namespace, $row->deployment_name);
+
+        $context = [
+            'ingress_request_id' => $row->id,
+            'actor_user_id' => $actorUserId,
+            'namespace' => $row->namespace,
+            'deployment_name' => $row->deployment_name,
+        ];
+
+        if ($reverted['found'] === false) {
+            $this->auditLogService->log('node_admin_path_revert_not_found', $actorLabel, $context + [
+                'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
+            ]);
+        } elseif (isset($reverted['error'])) {
+            $this->auditLogService->log('node_admin_path_revert_failed', $actorLabel, $context + [
+                'detail' => [
+                    'namespace' => $row->namespace,
+                    'deployment_name' => $row->deployment_name,
+                    'error' => $reverted['error'],
+                ],
+            ]);
+        } elseif ($reverted['reverted'] === true) {
+            $this->auditLogService->log('node_admin_path_reverted', $actorLabel, $context + [
+                'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
+            ]);
+        }
     }
 }

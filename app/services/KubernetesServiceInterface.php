@@ -26,18 +26,39 @@ interface KubernetesServiceInterface
      * as a stable label to detect and return an already-created Service
      * instead of creating a duplicate on retry (see KubernetesService).
      *
-     * @return array{service_name: string, node_port: int, k8s_uid: string}
+     * node_admin_path reports whether the target Deployment defines a
+     * NODE_ADMIN_PATH env var (found) and whether it needed patching to
+     * /nodeadmin (patched) — false/false if it isn't defined at all. A
+     * failed patch attempt (e.g. missing RBAC) never fails this call: it's
+     * reported as found=true, patched=false, error=<message> instead.
+     *
+     * @return array{service_name: string, node_port: int, k8s_uid: string, node_admin_path: array{found: bool, patched: bool, error?: string}}
      */
     public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId): array;
 
     public function deleteService(string $namespace, string $name): void;
 
     /**
+     * Counterpart to createNodePortService()/createIngress()'s node_admin_path
+     * patch — called when a request is deleted or expires, to put
+     * NODE_ADMIN_PATH back to its original value on the target Deployment.
+     * Callers must check no other active request still targets the same
+     * Deployment before calling this — it has no way to know that itself and
+     * will unconditionally revert whatever it finds. found=false (with no
+     * error) if the Deployment no longer exists or never had the env var.
+     *
+     * @return array{found: bool, reverted: bool, error?: string}
+     */
+    public function revertNodeAdminPathEnv(string $namespace, string $deploymentName): array;
+
+    /**
      * Creates a backing ClusterIP Service (same idempotency behaviour as
      * createNodePortService) plus an Ingress routing $host through it with
      * TLS terminated using the given (pre-existing) Secret.
      *
-     * @return array{service_name: string, ingress_name: string, k8s_uid: string}
+     * See createNodePortService() for what node_admin_path reports.
+     *
+     * @return array{service_name: string, ingress_name: string, k8s_uid: string, node_admin_path: array{found: bool, patched: bool, error?: string}}
      */
     public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId): array;
 

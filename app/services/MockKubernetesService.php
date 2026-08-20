@@ -16,7 +16,9 @@ class MockKubernetesService implements KubernetesServiceInterface
 
     private const DEPLOYMENTS = [
         'qa' => [
-            ['name' => 'checkout-api', 'replicas' => 2],
+            // Carries a NODE_ADMIN_PATH env var set to the "old" /hello-world
+            // value, to demo the patch path locally without a real cluster.
+            ['name' => 'checkout-api', 'replicas' => 2, 'env' => ['NODE_ADMIN_PATH' => '/hello-world']],
             ['name' => 'notification-worker', 'replicas' => 1],
         ],
         'staging' => [
@@ -27,6 +29,9 @@ class MockKubernetesService implements KubernetesServiceInterface
             ['name' => 'reporting-service', 'replicas' => 2],
         ],
     ];
+
+    private const NODE_ADMIN_PATH_VALUE = '/nodeadmin';
+    private const NODE_ADMIN_PATH_ORIGINAL_VALUE = '/hello-world';
 
     private const SECRETS = [
         'qa' => ['qa-wildcard-tls'],
@@ -60,6 +65,8 @@ class MockKubernetesService implements KubernetesServiceInterface
         }
 
         $suffix = substr(bin2hex(random_bytes(4)), 0, 6);
+
+        $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName);
 
         // NOTE: unlike the real KubernetesService, this can't actually
         // detect a duplicate across separate CLI invocations (no persistent
@@ -96,6 +103,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                 random_int(0, 0xffff),
                 random_int(0, 0xffffffffffff)
             ),
+            'node_admin_path' => $nodeAdminPath,
         ];
     }
 
@@ -122,6 +130,8 @@ class MockKubernetesService implements KubernetesServiceInterface
         $suffix = substr(bin2hex(random_bytes(4)), 0, 6);
         $serviceName = "tmp-ingress-svc-{$suffix}";
         $ingressName = "tmp-ingress-{$suffix}";
+
+        $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName);
 
         $labels = [
             'app.kubernetes.io/managed-by' => 'ingress-selfservice',
@@ -187,6 +197,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                 random_int(0, 0xffff),
                 random_int(0, 0xffffffffffff)
             ),
+            'node_admin_path' => $nodeAdminPath,
         ];
     }
 
@@ -206,6 +217,67 @@ class MockKubernetesService implements KubernetesServiceInterface
             'body' => null,
         ];
         // No-op: nothing real to delete.
+    }
+
+    /**
+     * Mirrors KubernetesService::syncNodeAdminPathEnv() against the flat
+     * mock DEPLOYMENTS data (no real container/env array to index into, so
+     * this is a simplified single-value stand-in, not a literal port).
+     *
+     * @return array{found: bool, patched: bool}
+     */
+    private function syncNodeAdminPathEnv(string $namespace, string $deploymentName): array
+    {
+        $result = $this->patchNodeAdminPathEnvIfPresent($namespace, $deploymentName, self::NODE_ADMIN_PATH_VALUE);
+        return ['found' => $result['found'], 'patched' => $result['patched']];
+    }
+
+    /**
+     * Mirrors KubernetesService::revertNodeAdminPathEnv() against the mock
+     * data — the mock has no persistent cluster state to actually mutate, so
+     * this only reports found/reverted and logs a PATCH entry, same as
+     * syncNodeAdminPathEnv() does for the create path.
+     *
+     * @return array{found: bool, reverted: bool}
+     */
+    public function revertNodeAdminPathEnv(string $namespace, string $deploymentName): array
+    {
+        $result = $this->patchNodeAdminPathEnvIfPresent($namespace, $deploymentName, self::NODE_ADMIN_PATH_ORIGINAL_VALUE);
+        return ['found' => $result['found'], 'reverted' => $result['patched']];
+    }
+
+    /**
+     * @return array{found: bool, patched: bool}
+     */
+    private function patchNodeAdminPathEnvIfPresent(string $namespace, string $deploymentName, string $targetValue): array
+    {
+        $matches = array_filter(
+            self::DEPLOYMENTS[$namespace] ?? [],
+            fn (array $d) => $d['name'] === $deploymentName
+        );
+        $deployment = array_shift($matches);
+
+        $currentValue = $deployment['env']['NODE_ADMIN_PATH'] ?? null;
+
+        if ($currentValue === null) {
+            return ['found' => false, 'patched' => false];
+        }
+
+        if ($currentValue === $targetValue) {
+            return ['found' => true, 'patched' => false];
+        }
+
+        $this->requestLog[] = [
+            'method' => 'PATCH',
+            'path' => "/apis/apps/v1/namespaces/{$namespace}/deployments/{$deploymentName}",
+            'body' => [[
+                'op' => 'replace',
+                'path' => '/spec/template/spec/containers/0/env/0/value',
+                'value' => $targetValue,
+            ]],
+        ];
+
+        return ['found' => true, 'patched' => true];
     }
 
     public function getRequestLog(): array

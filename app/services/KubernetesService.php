@@ -11,6 +11,9 @@ class KubernetesService implements KubernetesServiceInterface
     // single label (no dots).
     private const DNS_1123_SUBDOMAIN = '/^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/';
     private const REQUEST_ID_LABEL = 'ingress-selfservice.advws.com/request-id';
+    private const NODE_ADMIN_PATH_ENV_NAME = 'NODE_ADMIN_PATH';
+    private const NODE_ADMIN_PATH_VALUE = '/nodeadmin';
+    private const NODE_ADMIN_PATH_ORIGINAL_VALUE = '/hello-world';
 
     private KubernetesClient $client;
 
@@ -98,6 +101,8 @@ class KubernetesService implements KubernetesServiceInterface
             throw new KubernetesApiException("Deployment {$deploymentName} has no matchLabels selector to target");
         }
 
+        $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName, $deployment);
+
         $body = $this->buildServiceBody($namespace, $deploymentName, $targetPort, $requestId, $selector, 'tmp-nodeport-', 'NodePort');
 
         $created = $this->client->post("/api/v1/namespaces/{$namespace}/services", $body);
@@ -106,6 +111,7 @@ class KubernetesService implements KubernetesServiceInterface
             'service_name' => $created['metadata']['name'],
             'node_port' => $created['spec']['ports'][0]['nodePort'],
             'k8s_uid' => $created['metadata']['uid'],
+            'node_admin_path' => $nodeAdminPath,
         ];
     }
 
@@ -137,6 +143,8 @@ class KubernetesService implements KubernetesServiceInterface
             throw new KubernetesApiException("Deployment {$deploymentName} has no matchLabels selector to target");
         }
 
+        $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName, $deployment);
+
         $labels = $this->buildManagedLabels($deploymentName, $requestId);
 
         $existingService = $this->findServiceByRequestId($namespace, $requestId);
@@ -156,7 +164,115 @@ class KubernetesService implements KubernetesServiceInterface
             'service_name' => $serviceName,
             'ingress_name' => $createdIngress['metadata']['name'],
             'k8s_uid' => $createdIngress['metadata']['uid'],
+            'node_admin_path' => $nodeAdminPath,
         ];
+    }
+
+    /**
+     * Scans every container in the target Deployment's pod spec for an env
+     * entry named NODE_ADMIN_PATH. If found anywhere with a value other than
+     * NODE_ADMIN_PATH_VALUE, patches it there via a single JSON Patch call —
+     * one `replace` op per occurrence, since a Deployment can (rarely) carry
+     * more than one container defining it. Skips the PATCH entirely if every
+     * occurrence already holds the target value: patching a Deployment's pod
+     * template triggers a rollout, so a no-op patch would otherwise restart
+     * pods on every retry/re-create against an already-correct Deployment.
+     *
+     * A failed PATCH (e.g. the ServiceAccount lacks `patch` on deployments)
+     * is caught rather than propagated: this sync is a side effect of
+     * creating the Ingress/Service, not the point of the request, so it
+     * must never fail the whole create command. The error is returned
+     * instead so the caller can still audit-log it.
+     *
+     * @return array{found: bool, patched: bool, error?: string}
+     */
+    private function syncNodeAdminPathEnv(string $namespace, string $deploymentName, array $deployment): array
+    {
+        return $this->patchNodeAdminPathEnvIfPresent($namespace, $deploymentName, $deployment, self::NODE_ADMIN_PATH_VALUE);
+    }
+
+    /**
+     * Counterpart to syncNodeAdminPathEnv() — called when an ingress/nodeport
+     * request is deleted or expires, to put NODE_ADMIN_PATH back to its
+     * original value. Callers (KubernetesTask) are responsible for checking
+     * no other active request still targets the same Deployment first — this
+     * method has no way to know that on its own, it just unconditionally
+     * reverts whatever it finds.
+     *
+     * Unlike createNodePortService()/createIngress(), $deployment isn't
+     * already in hand here (delete has no reason to look it up otherwise),
+     * so this fetches it itself; a missing Deployment (e.g. already deleted
+     * by its owner) is reported as found=false rather than an error.
+     *
+     * @return array{found: bool, reverted: bool, error?: string}
+     */
+    public function revertNodeAdminPathEnv(string $namespace, string $deploymentName): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
+
+        $deployment = $this->getDeployment($namespace, $deploymentName);
+        if ($deployment === null) {
+            return ['found' => false, 'reverted' => false];
+        }
+
+        $result = $this->patchNodeAdminPathEnvIfPresent($namespace, $deploymentName, $deployment, self::NODE_ADMIN_PATH_ORIGINAL_VALUE);
+
+        $reverted = ['found' => $result['found'], 'reverted' => $result['patched']];
+        if (isset($result['error'])) {
+            $reverted['error'] = $result['error'];
+        }
+
+        return $reverted;
+    }
+
+    /**
+     * Shared by syncNodeAdminPathEnv() (patches to NODE_ADMIN_PATH_VALUE on
+     * create) and revertNodeAdminPathEnv() (patches to
+     * NODE_ADMIN_PATH_ORIGINAL_VALUE on delete/expire) — same scan-every-
+     * container-and-patch-what-differs logic, only $targetValue differs.
+     *
+     * @return array{found: bool, patched: bool, error?: string}
+     */
+    private function patchNodeAdminPathEnvIfPresent(string $namespace, string $deploymentName, array $deployment, string $targetValue): array
+    {
+        $containers = $deployment['spec']['template']['spec']['containers'] ?? [];
+        $ops = [];
+        $found = false;
+
+        foreach ($containers as $ci => $container) {
+            foreach ($container['env'] ?? [] as $ei => $envVar) {
+                if (($envVar['name'] ?? null) !== self::NODE_ADMIN_PATH_ENV_NAME) {
+                    continue;
+                }
+
+                $found = true;
+
+                if (($envVar['value'] ?? null) !== $targetValue) {
+                    $ops[] = [
+                        'op' => 'replace',
+                        'path' => "/spec/template/spec/containers/{$ci}/env/{$ei}/value",
+                        'value' => $targetValue,
+                    ];
+                }
+            }
+        }
+
+        if (!$found) {
+            return ['found' => false, 'patched' => false];
+        }
+
+        if (empty($ops)) {
+            return ['found' => true, 'patched' => false];
+        }
+
+        try {
+            $this->client->patch("/apis/apps/v1/namespaces/{$namespace}/deployments/{$deploymentName}", $ops);
+        } catch (KubernetesApiException $e) {
+            return ['found' => true, 'patched' => false, 'error' => $e->getMessage()];
+        }
+
+        return ['found' => true, 'patched' => true];
     }
 
     private function buildManagedLabels(string $deploymentName, int $requestId): array
