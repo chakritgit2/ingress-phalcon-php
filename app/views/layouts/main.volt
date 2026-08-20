@@ -3,9 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <title>Ingress Self-Service</title>
+    <script>
+    (function () {
+        var stored = localStorage.getItem('theme');
+        var dark = stored ? stored === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.classList.toggle('dark', dark);
+    })();
+    </script>
     <link rel="stylesheet" href="{{ url.get('css/app.css') }}">
 </head>
-<body class="min-h-screen bg-gray-50 font-sans text-gray-900 antialiased">
+<body class="min-h-screen bg-gray-50 font-sans text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100">
 <header class="sticky top-0 z-10 flex items-center justify-between bg-gray-900 px-6 py-4 shadow-md">
     <div class="flex items-center">
         <span class="mr-6 text-base font-semibold tracking-tight text-white">Ingress Self-Service</span>
@@ -41,6 +48,15 @@
         {% endif %}
     </div>
     <div class="flex items-center gap-3">
+        <button type="button" id="themeToggle" aria-label="สลับธีมสว่าง/มืด" class="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/20 bg-white/5 p-2 text-white transition hover:bg-white/10">
+            <svg id="themeIconSun" class="hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"/>
+                <path stroke-linecap="round" d="M12 2.5v2M12 19.5v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2.5 12h2M19.5 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/>
+            </svg>
+            <svg id="themeIconMoon" class="hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11Z"/>
+            </svg>
+        </button>
         {% if currentUser is defined and currentUser %}
             <span class="whitespace-nowrap text-sm text-gray-300">{{ currentUser.email }} <span class="text-gray-500">({{ currentUser.role }})</span></span>
             <form class="inline shrink-0" method="post" action="/logout">
@@ -57,9 +73,30 @@
 </header>
 <main class="mx-auto my-8 {% block container_class %}max-w-4xl{% endblock %} px-4">
     <div class="animate-fade-in">{{ flash.output() }}</div>
-    <div class="animate-fade-in rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200">
+    <div class="animate-fade-in rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-800">
         {% block content %}{% endblock %}
     </div>
 </main>
+<script>
+(function () {
+    var toggle = document.getElementById('themeToggle');
+    var sun = document.getElementById('themeIconSun');
+    var moon = document.getElementById('themeIconMoon');
+
+    function sync() {
+        var isDark = document.documentElement.classList.contains('dark');
+        sun.classList.toggle('hidden', !isDark);
+        moon.classList.toggle('hidden', isDark);
+    }
+
+    toggle.addEventListener('click', function () {
+        var isDark = document.documentElement.classList.toggle('dark');
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+        sync();
+    });
+
+    sync();
+})();
+</script>
 </body>
 </html>
