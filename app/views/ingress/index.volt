@@ -164,17 +164,13 @@
                     </a>
                     {% endif %}
                     {% if row.status == 'active' and currentUser.isDevops() %}
-                    <form class="renewForm inline" method="post" action="/ingress/{{ row.id }}/renew">
-                        <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
-                        <input type="hidden" name="additional_minutes" class="renewMinutesInput" value="">
-                        <button type="button" class="renewBtn inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20">
-                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <circle cx="12" cy="12" r="9"/>
-                                <path stroke-linecap="round" d="M12 7v5l3 3"/>
-                            </svg>
-                            ต่ออายุ
-                        </button>
-                    </form>
+                    <button type="button" class="renewBtn inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20" data-id="{{ row.id }}" data-expires-at="{{ row.expires_at }}" data-developer-name="{{ row.developer_name|e }}">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <circle cx="12" cy="12" r="9"/>
+                            <path stroke-linecap="round" d="M12 7v5l3 3"/>
+                        </svg>
+                        ต่ออายุ
+                    </button>
                     <form class="inline" method="post" action="/ingress/{{ row.id }}/delete" onsubmit="return confirm('ยืนยันลบ?');">
                         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
                         <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20">
@@ -212,6 +208,99 @@
 </div>
 
 {% if currentUser.isDevops() %}
+<style>
+/* The browser's default dialog:modal centering is a `margin: auto` trick,
+   which the site's global CSS reset (margin: 0 on every element) breaks —
+   without this, the dialog sticks to the top-left corner instead. Centering
+   explicitly via top/left + transform sidesteps that dependency entirely. */
+#renewDialog[open] {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    margin: 0;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+/* Progressive enhancement only — unsupported browsers (no @starting-style)
+   just skip straight to the end state above with no animation, still fine. */
+@starting-style {
+    #renewDialog[open] {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.96);
+    }
+}
+#renewDialog {
+    opacity: 1;
+    transition: opacity 0.15s ease-out, transform 0.15s ease-out, overlay 0.15s ease-out allow-discrete, display 0.15s ease-out allow-discrete;
+}
+#renewDialog::backdrop {
+    transition: background-color 0.15s ease-out;
+}
+</style>
+<dialog id="renewDialog" class="w-full max-w-sm overflow-hidden rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/50 dark:border-gray-700 dark:bg-gray-900">
+    <form id="renewForm" method="post">
+        <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
+        <input type="hidden" name="additional_minutes" id="renewMinutesInput" value="">
+
+        <div class="flex items-start gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path stroke-linecap="round" d="M12 7v5l3 3"/>
+                </svg>
+            </span>
+            <div class="min-w-0 flex-1 pt-0.5">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">ต่ออายุ Ingress</h3>
+                <p id="renewDeveloperName" class="truncate text-xs text-gray-500 dark:text-gray-400"></p>
+            </div>
+            <button type="button" id="renewCloseBtn" aria-label="ปิด" class="-m-1.5 shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="px-5 py-4">
+            <div class="mb-4 flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-gray-800/60">
+                <span class="text-gray-500 dark:text-gray-400">หมดอายุปัจจุบัน</span>
+                <span id="renewCurrentExpiry" class="font-medium text-gray-700 dark:text-gray-200"></span>
+            </div>
+
+            <p class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">ต่ออายุแบบด่วน</p>
+            <div class="mb-4 grid grid-cols-5 gap-1.5">
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="60">1 ชม.</button>
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="360">6 ชม.</button>
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="1440">1 วัน</button>
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="4320">3 วัน</button>
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="10080">7 วัน</button>
+            </div>
+
+            <div class="mb-3 flex items-center gap-2">
+                <div class="h-px flex-1 bg-gray-100 dark:bg-gray-800"></div>
+                <span class="text-[11px] text-gray-400 dark:text-gray-500">หรือกำหนดเอง</span>
+                <div class="h-px flex-1 bg-gray-100 dark:bg-gray-800"></div>
+            </div>
+
+            <input type="datetime-local" id="renewDatetimeInput" aria-label="วันเวลาหมดอายุใหม่" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+
+            <p id="renewPreview" class="mt-3 hidden items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium"></p>
+        </div>
+
+        <div class="flex justify-end gap-2 border-t border-gray-100 bg-gray-50/60 px-5 py-3 dark:border-gray-800 dark:bg-gray-800/30">
+            <button type="button" id="renewCancelBtn" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">ยกเลิก</button>
+            <button type="submit" id="renewSubmitBtn" disabled class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none dark:disabled:bg-gray-700">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path stroke-linecap="round" d="M12 7v5l3 3"/>
+                </svg>
+                ต่ออายุ
+            </button>
+        </div>
+    </form>
+</dialog>
+
 <script>
 // Re-run after each live-refresh (see the EventSource block below), since
 // swapping <tbody> innerHTML replaces these checkboxes and drops listeners
@@ -246,30 +335,147 @@ function initBulkControls() {
 
 initBulkControls();
 
-// Same re-run-after-live-refresh need as initBulkControls() above — the
-// renew buttons live inside the swapped <tbody>.
-function initRenewControls() {
+// The renew <dialog>/<form> live outside <tbody> (rendered once, not
+// swapped by live-refresh) — so its own internals (presets, datetime
+// input, cancel/submit) are wired up exactly once here. Only the trigger
+// buttons on each row live inside <tbody> and need re-binding after every
+// refresh — see initRenewTriggers() below.
+(function () {
+    var dialog = document.getElementById('renewDialog');
+    var form = document.getElementById('renewForm');
+    var minutesInput = document.getElementById('renewMinutesInput');
+    var developerNameLabel = document.getElementById('renewDeveloperName');
+    var currentExpiryLabel = document.getElementById('renewCurrentExpiry');
+    var datetimeInput = document.getElementById('renewDatetimeInput');
+    var preview = document.getElementById('renewPreview');
+    var submitBtn = document.getElementById('renewSubmitBtn');
+    var cancelBtn = document.getElementById('renewCancelBtn');
+    var closeBtn = document.getElementById('renewCloseBtn');
+    var currentExpiresAt = null;
+    var maxMinutes = 10080;
+
+    function pad(n) {
+        return String(n).padStart(2, '0');
+    }
+
+    // datetime-local wants "YYYY-MM-DDTHH:mm" in the *local* timezone —
+    // toISOString() would shift it to UTC, so build the string by hand.
+    function toLocalInputValue(date) {
+        return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+            + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+    }
+
+    // state: null hides the box entirely, 'error' (red) or 'success' (emerald)
+    // otherwise — matches the disabled/enabled state of the submit button.
+    function setPreview(text, state) {
+        if (!text) {
+            preview.classList.add('hidden');
+            preview.classList.remove('flex');
+            preview.textContent = '';
+            return;
+        }
+
+        preview.textContent = text;
+        preview.classList.remove('hidden');
+        preview.classList.add('flex');
+
+        var isError = state === 'error';
+        preview.classList.toggle('bg-red-50', isError);
+        preview.classList.toggle('text-red-600', isError);
+        preview.classList.toggle('dark:bg-red-500/10', isError);
+        preview.classList.toggle('dark:text-red-400', isError);
+        preview.classList.toggle('bg-emerald-50', !isError);
+        preview.classList.toggle('text-emerald-700', !isError);
+        preview.classList.toggle('dark:bg-emerald-500/10', !isError);
+        preview.classList.toggle('dark:text-emerald-400', !isError);
+    }
+
+    function applyMinutes(minutes) {
+        if (!Number.isInteger(minutes) || minutes < 1 || minutes > maxMinutes) {
+            minutesInput.value = '';
+            submitBtn.disabled = true;
+            setPreview('เลือกเวลาใหม่ที่มากกว่าเวลาเดิม ไม่เกิน 7 วัน', 'error');
+            return;
+        }
+
+        minutesInput.value = minutes;
+        submitBtn.disabled = false;
+        var days = Math.floor(minutes / 1440);
+        var hours = Math.floor((minutes % 1440) / 60);
+        var mins = minutes % 60;
+        var parts = [];
+        if (days) parts.push(days + ' วัน');
+        if (hours) parts.push(hours + ' ชม.');
+        if (mins || parts.length === 0) parts.push(mins + ' นาที');
+        setPreview('หมดอายุใหม่ ' + datetimeInput.value.replace('T', ' ') + ' (+' + parts.join(' ') + ')', 'success');
+    }
+
+    function onDatetimeChange() {
+        if (!datetimeInput.value || !currentExpiresAt) {
+            minutesInput.value = '';
+            submitBtn.disabled = true;
+            setPreview('', null);
+            return;
+        }
+
+        var picked = new Date(datetimeInput.value);
+        var diffMinutes = Math.round((picked.getTime() - currentExpiresAt.getTime()) / 60000);
+        applyMinutes(diffMinutes);
+    }
+
+    document.querySelectorAll('.renewPresetBtn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var minutes = parseInt(btn.dataset.minutes, 10);
+            var newDate = new Date(currentExpiresAt.getTime() + minutes * 60000);
+            datetimeInput.value = toLocalInputValue(newDate);
+            applyMinutes(minutes);
+        });
+    });
+
+    datetimeInput.addEventListener('change', onDatetimeChange);
+    cancelBtn.addEventListener('click', function () {
+        dialog.close();
+    });
+    closeBtn.addEventListener('click', function () {
+        dialog.close();
+    });
+    // showModal()'s ::backdrop covers the full viewport regardless of where
+    // the dialog itself is positioned — clicking it (not the form inside)
+    // closes the dialog, same as clicking Cancel.
+    dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) {
+            dialog.close();
+        }
+    });
+
+    window.openRenewDialog = function (btn) {
+        currentExpiresAt = new Date(btn.dataset.expiresAt.replace(' ', 'T'));
+        form.action = '/ingress/' + btn.dataset.id + '/renew';
+        developerNameLabel.textContent = btn.dataset.developerName;
+        currentExpiryLabel.textContent = btn.dataset.expiresAt;
+        datetimeInput.min = toLocalInputValue(new Date(currentExpiresAt.getTime() + 60000));
+        datetimeInput.value = '';
+        minutesInput.value = '';
+        submitBtn.disabled = true;
+        setPreview('', null);
+        // showModal()'s default UA styling (position: fixed; inset: 0;
+        // margin: auto) already dead-centers <dialog> in the viewport —
+        // no extra positioning needed.
+        dialog.showModal();
+    };
+})();
+
+// Re-run after each live-refresh (see the EventSource block below), since
+// swapping <tbody> innerHTML drops listeners bound to the old row buttons.
+function initRenewTriggers() {
     document.querySelectorAll('.renewBtn').forEach(function (btn) {
         btn.addEventListener('click', function () {
-            var minutes = prompt('ต่ออายุกี่นาที? (1-10080)', '60');
-            if (minutes === null) {
-                return;
-            }
-
-            var parsed = parseInt(minutes, 10);
-            if (!Number.isInteger(parsed) || String(parsed) !== minutes.trim() || parsed < 1 || parsed > 10080) {
-                alert('กรุณาระบุจำนวนนาทีที่ถูกต้อง (1-10080)');
-                return;
-            }
-
-            var form = btn.closest('form');
-            form.querySelector('.renewMinutesInput').value = parsed;
-            form.submit();
+            window.openRenewDialog(btn);
         });
     });
 }
 
-initRenewControls();
+initRenewTriggers();
 </script>
 {% endif %}
 
@@ -311,8 +517,8 @@ initRenewControls();
                 if (typeof initBulkControls === 'function') {
                     initBulkControls();
                 }
-                if (typeof initRenewControls === 'function') {
-                    initRenewControls();
+                if (typeof initRenewTriggers === 'function') {
+                    initRenewTriggers();
                 }
             })
             .catch(function () {})
