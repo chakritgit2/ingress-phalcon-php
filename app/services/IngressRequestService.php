@@ -46,6 +46,7 @@ class IngressRequestService
     public function create(array $data, Users $user): IngressRequests
     {
         $normalized = $this->validateAndNormalize($data);
+        $this->assertNoDuplicateNodePortEndpoint($normalized);
 
         $row = new IngressRequests();
         $row->developer_name = $normalized['developer_name'];
@@ -89,6 +90,7 @@ class IngressRequestService
         }
 
         $normalized = $this->validateAndNormalize($data);
+        $this->assertNoDuplicateNodePortEndpoint($normalized, $row->id);
 
         $row->developer_name = $normalized['developer_name'];
         $row->namespace = $normalized['namespace'];
@@ -188,7 +190,15 @@ class IngressRequestService
         if ($host === '') {
             throw new \InvalidArgumentException('กรุณาระบุ Host (โดเมน)');
         }
-        if (!preg_match(self::DNS_1123_SUBDOMAIN, $host) || strlen($host) > 253) {
+        // NodePort has no real domain — Host there is the external-facing
+        // IP that fronts node_ip:node_port (not node_ip itself, which stays
+        // fixed per $this->nodeIp); 'ingress' keeps the DNS hostname format
+        // Kubernetes' own Ingress resource requires.
+        if ($requestType === 'nodeport') {
+            if (filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) === false) {
+                throw new \InvalidArgumentException('รูปแบบ Host ไม่ถูกต้อง — สำหรับ NodePort ต้องเป็น IP เช่น 192.168.33.31');
+            }
+        } elseif (!preg_match(self::DNS_1123_SUBDOMAIN, $host) || strlen($host) > 253) {
             throw new \InvalidArgumentException('รูปแบบ Host ไม่ถูกต้อง — ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)');
         }
         if ($requestType === 'ingress' && $secretName === '') {
@@ -206,6 +216,35 @@ class IngressRequestService
             'schedule_end_minutes' => $scheduleMinutes,
             'note' => $note !== '' ? $note : null,
         ];
+    }
+
+    /**
+     * NodePort's Host is a developer-chosen external IP, not something
+     * Kubernetes enforces uniqueness on (unlike node_port, which k8s itself
+     * guarantees is never double-allocated) — two active/pending requests
+     * claiming the same IP+target_port would collide at whatever fronts
+     * that endpoint. Only checked for 'nodeport': an 'ingress' Host is a
+     * DNS hostname, which is naturally expected to be unique on its own.
+     */
+    private function assertNoDuplicateNodePortEndpoint(array $normalized, ?int $excludeId = null): void
+    {
+        if ($normalized['request_type'] !== 'nodeport') {
+            return;
+        }
+
+        $conditions = "request_type = 'nodeport' AND host = :host: AND target_port = :target_port: AND status IN ('pending', 'active')";
+        $bind = ['host' => $normalized['host'], 'target_port' => $normalized['target_port']];
+
+        if ($excludeId !== null) {
+            $conditions .= ' AND id != :exclude_id:';
+            $bind['exclude_id'] = $excludeId;
+        }
+
+        $duplicate = IngressRequests::findFirst(['conditions' => $conditions, 'bind' => $bind]);
+
+        if ($duplicate !== null) {
+            throw new \InvalidArgumentException("Host {$normalized['host']} พอร์ต {$normalized['target_port']} ถูกใช้งานอยู่แล้วโดยรายการอื่น");
+        }
     }
 
     public function deleteManually(IngressRequests $row, Users $user): void
