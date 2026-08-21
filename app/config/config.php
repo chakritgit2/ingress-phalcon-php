@@ -51,6 +51,14 @@ return new Config([
         'charset'    => 'utf8mb4',
     ],
 
+    'mongo' => [
+        'host'     => getenv('MONGO_HOST') ?: 'localhost',
+        'port'     => (int) (getenv('MONGO_PORT') ?: 27017),
+        'username' => getenv('MONGO_USER') ?: '',
+        'password' => getenv('MONGO_PASS') ?: '',
+        'dbname'   => getenv('MONGO_DB') ?: '',
+    ],
+
     'google' => [
         'client_id'     => getenv('GOOGLE_CLIENT_ID') ?: '',
         'client_secret' => getenv('GOOGLE_CLIENT_SECRET') ?: '',
