@@ -208,6 +208,21 @@
 </div>
 
 {% if currentUser.isDevops() %}
+<style>
+/* The browser's default dialog:modal centering is a `margin: auto` trick,
+   which the site's global CSS reset (margin: 0 on every element) breaks —
+   without this, the dialog sticks to the top-left corner instead. Centering
+   explicitly via top/left + transform sidesteps that dependency entirely. */
+#renewDialog[open] {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    margin: 0;
+    transform: translate(-50%, -50%);
+}
+</style>
 <dialog id="renewDialog" class="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/40 dark:border-gray-700 dark:bg-gray-900">
     <form id="renewForm" method="post" class="p-5">
         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
