@@ -15,6 +15,17 @@ class KubernetesService implements KubernetesServiceInterface
     private const NODE_ADMIN_PATH_VALUE = '/nodeadmin';
     private const NODE_ADMIN_PATH_ORIGINAL_VALUE = '/hello-world';
 
+    // The Service's own exposed port is always 80 — for NodePort-type it's
+    // irrelevant anyway (external access goes through the k8s-assigned
+    // nodePort instead), and for Ingress-type the backend just needs a
+    // fixed, known port to address the Service on. Only targetPort (which
+    // container port traffic actually gets forwarded to) varies, and that's
+    // determined by the Deployment's own container name, not user input.
+    private const SERVICE_PORT = 80;
+    private const NODERED_CONTAINER_NAME = 'nodered';
+    private const NODERED_TARGET_PORT = 1880;
+    private const DEFAULT_TARGET_PORT = 80;
+
     private KubernetesClient $client;
 
     public function __construct(KubernetesClient $client)
@@ -79,6 +90,21 @@ class KubernetesService implements KubernetesServiceInterface
         return array_map(fn (array $c) => $c['name'] ?? '', $containers);
     }
 
+    /**
+     * The real target port to forward to, per $deployment's own container
+     * name(s) — not whatever the ingress request's target_port happens to
+     * hold. nodered's own container listens on 1880; everything else
+     * defaults to 80.
+     */
+    private function resolveTargetPort(array $deployment): int
+    {
+        $containerNames = $this->extractContainerNames($deployment);
+
+        return in_array(self::NODERED_CONTAINER_NAME, $containerNames, true)
+            ? self::NODERED_TARGET_PORT
+            : self::DEFAULT_TARGET_PORT;
+    }
+
     public function getDeployment(string $namespace, string $name): ?array
     {
         $namespace = $this->assertValidLabel($namespace, 'namespace');
@@ -137,7 +163,9 @@ class KubernetesService implements KubernetesServiceInterface
 
         $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName, $deployment);
 
-        $body = $this->buildServiceBody($namespace, $deploymentName, $targetPort, $requestId, $selector, 'tmp-nodeport-', 'NodePort');
+        $resolvedTargetPort = $this->resolveTargetPort($deployment);
+
+        $body = $this->buildServiceBody($namespace, $deploymentName, $resolvedTargetPort, $requestId, $selector, 'tmp-nodeport-', 'NodePort');
 
         $created = $this->client->post("/api/v1/namespaces/{$namespace}/services", $body);
 
@@ -185,12 +213,13 @@ class KubernetesService implements KubernetesServiceInterface
         if ($existingService !== null) {
             $serviceName = $existingService['service_name'];
         } else {
-            $serviceBody = $this->buildServiceBody($namespace, $deploymentName, $targetPort, $requestId, $selector, 'tmp-ingress-svc-', 'ClusterIP');
+            $resolvedTargetPort = $this->resolveTargetPort($deployment);
+            $serviceBody = $this->buildServiceBody($namespace, $deploymentName, $resolvedTargetPort, $requestId, $selector, 'tmp-ingress-svc-', 'ClusterIP');
             $createdService = $this->client->post("/api/v1/namespaces/{$namespace}/services", $serviceBody);
             $serviceName = $createdService['metadata']['name'];
         }
 
-        $ingressBody = $this->buildIngressBody($namespace, $host, $secretName, $serviceName, $targetPort, $labels);
+        $ingressBody = $this->buildIngressBody($namespace, $host, $secretName, $serviceName, self::SERVICE_PORT, $labels);
 
         $createdIngress = $this->client->post("/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses", $ingressBody);
 
@@ -339,7 +368,7 @@ class KubernetesService implements KubernetesServiceInterface
                 'type' => $serviceType,
                 'selector' => $selector,
                 'ports' => [[
-                    'port' => $targetPort,
+                    'port' => self::SERVICE_PORT,
                     'targetPort' => $targetPort,
                     'protocol' => 'TCP',
                 ]],
@@ -351,8 +380,11 @@ class KubernetesService implements KubernetesServiceInterface
      * Shared by createIngress() and previewCreateIngressPayload(). $serviceName
      * is nullable so a preview (built before the idempotency lookup/service
      * create has happened) can represent "not yet resolved" explicitly.
+     * $servicePort must match the backing Service's own exposed `port`
+     * (always self::SERVICE_PORT, see buildServiceBody()) — Ingress talks to
+     * the Service on that port, not the container's targetPort.
      */
-    private function buildIngressBody(string $namespace, string $host, string $secretName, ?string $serviceName, int $targetPort, array $labels): array
+    private function buildIngressBody(string $namespace, string $host, string $secretName, ?string $serviceName, int $servicePort, array $labels): array
     {
         return [
             'apiVersion' => 'networking.k8s.io/v1',
@@ -375,7 +407,7 @@ class KubernetesService implements KubernetesServiceInterface
                             'backend' => [
                                 'service' => [
                                     'name' => $serviceName,
-                                    'port' => ['number' => $targetPort],
+                                    'port' => ['number' => $servicePort],
                                 ],
                             ],
                         ]],
@@ -395,10 +427,15 @@ class KubernetesService implements KubernetesServiceInterface
         $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
         $targetPort = $this->assertValidPort($targetPort);
 
+        // No live Deployment lookup here (IngressRequestService::buildPreviewPayload()
+        // is pure local computation, no HTTP) — can't read the real container
+        // name(s) to resolve targetPort the way createNodePortService() does,
+        // so this just previews the shared 80 default. Overwritten with the
+        // real value once the bot actually processes the command.
         return [[
             'method' => 'POST',
             'path' => "/api/v1/namespaces/{$namespace}/services",
-            'body' => $this->buildServiceBody($namespace, $deploymentName, $targetPort, $requestId, null, 'tmp-nodeport-', 'NodePort'),
+            'body' => $this->buildServiceBody($namespace, $deploymentName, self::DEFAULT_TARGET_PORT, $requestId, null, 'tmp-nodeport-', 'NodePort'),
         ]];
     }
 
@@ -412,10 +449,11 @@ class KubernetesService implements KubernetesServiceInterface
 
         $labels = $this->buildManagedLabels($deploymentName, $requestId);
 
+        // Same no-live-lookup caveat as previewCreateNodePortServicePayload().
         $servicePreview = [
             'method' => 'POST',
             'path' => "/api/v1/namespaces/{$namespace}/services",
-            'body' => $this->buildServiceBody($namespace, $deploymentName, $targetPort, $requestId, null, 'tmp-ingress-svc-', 'ClusterIP'),
+            'body' => $this->buildServiceBody($namespace, $deploymentName, self::DEFAULT_TARGET_PORT, $requestId, null, 'tmp-ingress-svc-', 'ClusterIP'),
         ];
 
         // The real backing Service's name only exists once Kubernetes
@@ -430,7 +468,7 @@ class KubernetesService implements KubernetesServiceInterface
         $ingressPreview = [
             'method' => 'POST',
             'path' => "/apis/networking.k8s.io/v1/namespaces/{$namespace}/ingresses",
-            'body' => $this->buildIngressBody($namespace, $host, $secretName, $placeholderServiceName, $targetPort, $labels),
+            'body' => $this->buildIngressBody($namespace, $host, $secretName, $placeholderServiceName, self::SERVICE_PORT, $labels),
         ];
 
         return [$servicePreview, $ingressPreview];

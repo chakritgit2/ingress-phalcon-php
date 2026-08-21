@@ -39,6 +39,14 @@ class MockKubernetesService implements KubernetesServiceInterface
         'production' => ['wildcard-advws-tls', 'kapooktopup-tls'],
     ];
 
+    // Mirrors KubernetesService::SERVICE_PORT/resolveTargetPort() — see
+    // that class for why these are fixed rather than taken from the
+    // ingress request's own target_port.
+    private const SERVICE_PORT = 80;
+    private const NODERED_CONTAINER_NAME = 'nodered';
+    private const NODERED_TARGET_PORT = 1880;
+    private const DEFAULT_TARGET_PORT = 80;
+
     public function listNamespaces(): array
     {
         return self::NAMESPACES;
@@ -75,6 +83,19 @@ class MockKubernetesService implements KubernetesServiceInterface
         return $d + ['namespace' => $namespace, 'container_names' => $d['containers'] ?? [$d['name']]];
     }
 
+    /**
+     * Mirrors KubernetesService::resolveTargetPort() against the mock's flat
+     * DEPLOYMENTS entry (no real pod spec to index into).
+     */
+    private function resolveTargetPort(array $deployment): int
+    {
+        $containerNames = $deployment['containers'] ?? [$deployment['name']];
+
+        return in_array(self::NODERED_CONTAINER_NAME, $containerNames, true)
+            ? self::NODERED_TARGET_PORT
+            : self::DEFAULT_TARGET_PORT;
+    }
+
     public function listSecrets(string $namespace): array
     {
         return self::SECRETS[$namespace] ?? [];
@@ -93,6 +114,8 @@ class MockKubernetesService implements KubernetesServiceInterface
         $suffix = substr(bin2hex(random_bytes(4)), 0, 6);
 
         $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName);
+
+        $resolvedTargetPort = $this->resolveTargetPort(array_shift($exists));
 
         // NOTE: unlike the real KubernetesService, this can't actually
         // detect a duplicate across separate CLI invocations (no persistent
@@ -114,7 +137,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                         'ingress-selfservice.advws.com/request-id' => (string) $requestId,
                     ],
                 ],
-                'spec' => ['type' => 'NodePort', 'ports' => [['port' => $targetPort, 'targetPort' => $targetPort]]],
+                'spec' => ['type' => 'NodePort', 'ports' => [['port' => self::SERVICE_PORT, 'targetPort' => $resolvedTargetPort]]],
             ],
         ];
 
@@ -159,6 +182,8 @@ class MockKubernetesService implements KubernetesServiceInterface
 
         $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName);
 
+        $resolvedTargetPort = $this->resolveTargetPort(array_shift($exists));
+
         $labels = [
             'app.kubernetes.io/managed-by' => 'ingress-selfservice',
             'advws-group' => 'company',
@@ -182,7 +207,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                     'namespace' => $namespace,
                     'labels' => $labels,
                 ],
-                'spec' => ['type' => 'ClusterIP', 'ports' => [['port' => $targetPort, 'targetPort' => $targetPort]]],
+                'spec' => ['type' => 'ClusterIP', 'ports' => [['port' => self::SERVICE_PORT, 'targetPort' => $resolvedTargetPort]]],
             ],
         ];
 
@@ -204,7 +229,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                         'http' => ['paths' => [[
                             'path' => '/',
                             'pathType' => 'ImplementationSpecific',
-                            'backend' => ['service' => ['name' => $serviceName, 'port' => ['number' => $targetPort]]],
+                            'backend' => ['service' => ['name' => $serviceName, 'port' => ['number' => self::SERVICE_PORT]]],
                         ]]],
                     ]],
                     'tls' => [['hosts' => [$host], 'secretName' => $secretName]],
@@ -334,7 +359,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                         'ingress-selfservice.advws.com/request-id' => (string) $requestId,
                     ],
                 ],
-                'spec' => ['type' => 'NodePort', 'selector' => null, 'ports' => [['port' => $targetPort, 'targetPort' => $targetPort]]],
+                'spec' => ['type' => 'NodePort', 'selector' => null, 'ports' => [['port' => self::SERVICE_PORT, 'targetPort' => self::DEFAULT_TARGET_PORT]]],
             ],
         ]];
     }
@@ -359,7 +384,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                     'namespace' => $namespace,
                     'labels' => $labels,
                 ],
-                'spec' => ['type' => 'ClusterIP', 'selector' => null, 'ports' => [['port' => $targetPort, 'targetPort' => $targetPort]]],
+                'spec' => ['type' => 'ClusterIP', 'selector' => null, 'ports' => [['port' => self::SERVICE_PORT, 'targetPort' => self::DEFAULT_TARGET_PORT]]],
             ],
         ];
 
@@ -383,7 +408,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                         'http' => ['paths' => [[
                             'path' => '/',
                             'pathType' => 'ImplementationSpecific',
-                            'backend' => ['service' => ['name' => $placeholderServiceName, 'port' => ['number' => $targetPort]]],
+                            'backend' => ['service' => ['name' => $placeholderServiceName, 'port' => ['number' => self::SERVICE_PORT]]],
                         ]]],
                     ]],
                     'tls' => [['hosts' => [$host], 'secretName' => $secretName]],
