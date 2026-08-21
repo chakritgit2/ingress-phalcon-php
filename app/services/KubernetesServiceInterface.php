@@ -42,6 +42,12 @@ interface KubernetesServiceInterface
      * as a stable label to detect and return an already-created Service
      * instead of creating a duplicate on retry (see KubernetesService).
      *
+     * $targetPort is validated but no longer determines the Service's own
+     * exposed port (always 80) or the real targetPort forwarded to the pod
+     * — that's resolved server-side from the target Deployment's container
+     * name(s) instead (nodered -> 1880, else 80; see
+     * KubernetesService::resolveTargetPort()).
+     *
      * node_admin_path reports whether the target Deployment defines a
      * NODE_ADMIN_PATH env var (found) and whether it needed patching to
      * /nodeadmin (patched) — false/false if it isn't defined at all. A
@@ -72,7 +78,8 @@ interface KubernetesServiceInterface
      * createNodePortService) plus an Ingress routing $host through it with
      * TLS terminated using the given (pre-existing) Secret.
      *
-     * See createNodePortService() for what node_admin_path reports.
+     * See createNodePortService() for what node_admin_path reports, and for
+     * why $targetPort no longer determines the Service/Ingress's real ports.
      *
      * @return array{service_name: string, ingress_name: string, k8s_uid: string, node_admin_path: array{found: bool, patched: bool, error?: string}}
      */
