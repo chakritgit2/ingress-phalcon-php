@@ -4,8 +4,10 @@ use App\Services\AuditLogService;
 use App\Services\K8sConfigResolver;
 use App\Services\KubernetesClient;
 use App\Services\KubernetesService;
+use App\Services\LineLoginService;
 use App\Services\MockKubernetesService;
 use App\Services\SettingsService;
+use MongoDB\Client as MongoClient;
 use Phalcon\Autoload\Loader;
 use Phalcon\Cli\Console;
 use Phalcon\Cli\Dispatcher as CliDispatcher;
@@ -65,6 +67,24 @@ $di->setShared('auditLogService', fn () => new AuditLogService());
 
 $di->setShared('settingsService', function () {
     return new SettingsService($this->get('auditLogService'));
+});
+
+// Mirrors app/config/services.php's 'mongo'/'lineLoginService' wiring —
+// this console DI is a separate container from the web app's, so it needs
+// its own copy. KubernetesTask (run from here, see k8s/cronjob.yaml) is
+// the only consumer of lineLoginService.
+$di->setShared('mongo', function () use ($config) {
+    $auth = $config->mongo->username !== ''
+        ? rawurlencode($config->mongo->username) . ':' . rawurlencode($config->mongo->password) . '@'
+        : '';
+    $uri = "mongodb://{$auth}{$config->mongo->host}:{$config->mongo->port}";
+
+    $client = new MongoClient($uri);
+    return $client->selectDatabase($config->mongo->dbname);
+});
+
+$di->setShared('lineLoginService', function () {
+    return new LineLoginService($this->get('mongo'));
 });
 
 $di->setShared('dispatcher', function () {

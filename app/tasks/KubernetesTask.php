@@ -76,6 +76,8 @@ class KubernetesTask extends Task
                     $row->expires_at = date('Y-m-d H:i:s', time() + $row->schedule_end_minutes * 60);
                     $row->save();
 
+                    $this->syncLineLogin('activate', $row, $actorLabel, $command->requested_by_user_id);
+
                     $command->result = json_encode($created);
 
                     $this->auditLogService->log('ingress_create', $actorLabel, [
@@ -136,6 +138,8 @@ class KubernetesTask extends Task
                     $row->deleted_at = date('Y-m-d H:i:s');
                     $row->deleted_by = 'manual';
                     $row->save();
+
+                    $this->syncLineLogin('deactivate', $row, $actorLabel, $command->requested_by_user_id);
 
                     $this->auditLogService->log('ingress_delete', $actorLabel, [
                         'ingress_request_id' => $row->id,
@@ -239,6 +243,8 @@ class KubernetesTask extends Task
                 $row->deleted_by = 'sweeper';
                 $row->save();
 
+                $this->syncLineLogin('deactivate', $row, 'system:sweeper');
+
                 $this->auditLogService->log('ingress_delete', 'system:sweeper', [
                     'ingress_request_id' => $row->id,
                     'namespace' => $row->namespace,
@@ -266,6 +272,37 @@ class KubernetesTask extends Task
         }
 
         echo "processed {$count} expired row(s)\n";
+    }
+
+    /**
+     * Registers/deactivates $row->host in the external line_login
+     * collection (see LineLoginService). Never fails the create/delete
+     * that already succeeded on the cluster — a Mongo hiccup is logged as
+     * its own audit event instead, same as node_admin_path's non-fatal
+     * pattern below. Skipped entirely for the null host historical
+     * NodePort rows created before host became mandatory.
+     */
+    private function syncLineLogin(string $action, IngressRequests $row, string $actorLabel, ?int $actorUserId = null): void
+    {
+        if ($row->host === null) {
+            return;
+        }
+
+        try {
+            if ($action === 'activate') {
+                $this->lineLoginService->activate($row->host);
+            } else {
+                $this->lineLoginService->deactivate($row->host);
+            }
+        } catch (\Throwable $e) {
+            $this->auditLogService->log('line_login_sync_failed', $actorLabel, [
+                'ingress_request_id' => $row->id,
+                'actor_user_id' => $actorUserId,
+                'namespace' => $row->namespace,
+                'deployment_name' => $row->deployment_name,
+                'detail' => ['action' => $action, 'host' => $row->host, 'error' => $e->getMessage()],
+            ]);
+        }
     }
 
     /**

@@ -18,7 +18,7 @@
             </label>
         </div>
 
-        <p id="type_desc_nodeport" class="mt-2 text-xs text-gray-500 dark:text-gray-400">เข้าถึงผ่าน <code class="rounded bg-gray-100 px-1 py-0.5 text-[11px] dark:bg-gray-800">node_ip:node_port</code> โดยตรง ไม่ต้องมีโดเมนหรือ TLS</p>
+        <p id="type_desc_nodeport" class="mt-2 text-xs text-gray-500 dark:text-gray-400">เข้าถึงผ่าน <code class="rounded bg-gray-100 px-1 py-0.5 text-[11px] dark:bg-gray-800">node_ip:node_port</code> โดยตรง ไม่ต้องมี TLS แต่ยังต้องระบุ Host ไว้ใช้เป็น key สำหรับ LINE Login</p>
         <p id="type_desc_ingress" class="mt-2 hidden text-xs text-gray-500 dark:text-gray-400">เข้าถึงผ่านโดเมนที่กำหนดเอง (HTTPS) ต้องกรอก Host และเลือก TLS Secret</p>
 
         <p class="mt-2 flex items-start gap-1.5 text-xs text-gray-500 dark:text-gray-400">
@@ -64,20 +64,20 @@
         <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="number" id="target_port" name="target_port" value="80" min="1" max="65535" required>
     </div>
 
-    <div id="ingress_fields" class="hidden space-y-5 border-l-2 border-blue-200 pl-4 dark:border-blue-500/30">
-        <div>
-            <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="host">Host (โดเมน) *</label>
-            <div class="flex gap-2">
-                <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="text" id="host" name="host" placeholder="myapp.advws.com" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*" title="ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)">
-                <button type="button" id="genHostUuidBtn" title="สุ่ม UUID ใส่ Host" class="inline-flex shrink-0 cursor-pointer items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0 1 14.5-4.5M20 15a8 8 0 0 1-14.5 4.5"/>
-                    </svg>
-                </button>
-            </div>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ใส่แค่ชื่อโดเมนเปล่าๆ เช่น myapp.advws.com — ห้ามมี http:// หรือ / ต่อท้าย</p>
+    <div>
+        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="host">Host (โดเมน) *</label>
+        <div class="flex gap-2">
+            <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="text" id="host" name="host" placeholder="myapp.advws.com" pattern="[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*" title="ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)" required>
+            <button type="button" id="genHostUuidBtn" title="สุ่ม UUID ใส่ Host" class="inline-flex shrink-0 cursor-pointer items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0 1 14.5-4.5M20 15a8 8 0 0 1-14.5 4.5"/>
+                </svg>
+            </button>
         </div>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ใส่แค่ชื่อโดเมนเปล่าๆ เช่น myapp.advws.com — ห้ามมี http:// หรือ / ต่อท้าย</p>
+    </div>
 
+    <div id="ingress_fields" class="hidden space-y-5 border-l-2 border-blue-200 pl-4 dark:border-blue-500/30">
         <div>
             <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="secret_name">Secret Name (TLS) *</label>
             <select class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:disabled:bg-gray-900 dark:disabled:text-gray-600" id="secret_name" name="secret_name" disabled>
@@ -159,7 +159,6 @@ document.querySelectorAll('input[name="request_type"]').forEach(function (radio)
         ingressFields.classList.toggle('hidden', !isIngress);
         typeDescNodeport.classList.toggle('hidden', isIngress);
         typeDescIngress.classList.toggle('hidden', !isIngress);
-        hostInput.required = isIngress;
         document.getElementById('secret_name').required = isIngress;
     });
 });

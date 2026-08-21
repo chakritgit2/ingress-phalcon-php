@@ -37,6 +37,7 @@ full design/decision record.
 | Var | Purpose |
 |---|---|
 | `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASS` | MySQL connection |
+| `MONGO_HOST`, `MONGO_PORT`, `MONGO_DB`, `MONGO_USER`, `MONGO_PASS` | MongoDB connection — used to register/deactivate each ingress's `host` in the `line_login` collection the LINE-login gateway reads from |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI` | Google OAuth app credentials |
 | `GOOGLE_HD` | Allowed Google Workspace hosted domain (default `advws.com`) |
 | `COOKIE_SIGN_KEY` | Session/cookie signing secret |
