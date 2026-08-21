@@ -12,6 +12,8 @@
     {{ detail['email']|e }}
 {% elseif event_type == 'user_email_changed' %}
     {{ detail['old_email']|e }} &rarr; {{ detail['new_email']|e }}
+{% elseif event_type == 'ingress_renewed' %}
+    +{{ detail['added_minutes'] }} นาที &middot; {{ detail['old_expires_at']|e }} &rarr; {{ detail['new_expires_at']|e }}
 {% elseif event_type == 'preview_payload_failed' %}
     {{ detail['error']|e }}
 {% elseif event_type == 'node_admin_path_patched' or event_type == 'node_admin_path_not_found' %}

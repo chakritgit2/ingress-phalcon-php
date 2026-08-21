@@ -291,6 +291,32 @@ class IngressController extends ControllerBase
         return $this->response->redirect('/ingress');
     }
 
+    public function renewAction($id)
+    {
+        if (!$this->request->isPost() || !$this->security->checkToken()) {
+            $this->flash->error('คำขอไม่ถูกต้อง (CSRF)');
+            return $this->response->redirect('/ingress');
+        }
+
+        $row = IngressRequests::findFirst((int) $id);
+
+        if ($row === null || $row->status !== 'active') {
+            $this->flash->error('ไม่พบรายการ หรือรายการนี้ไม่ได้อยู่ในสถานะ active');
+            return $this->response->redirect('/ingress');
+        }
+
+        $additionalMinutes = $this->request->getPost('additional_minutes', 'int', 0);
+
+        try {
+            $this->ingressRequestService->renew($row, $additionalMinutes, $this->currentUser());
+            $this->flash->success("ต่ออายุแล้ว หมดอายุใหม่: {$row->expires_at}");
+        } catch (\Throwable $e) {
+            $this->flash->error('ต่ออายุไม่สำเร็จ: ' . $e->getMessage());
+        }
+
+        return $this->response->redirect('/ingress');
+    }
+
     public function retryAction($id)
     {
         if (!$this->request->isPost() || !$this->security->checkToken()) {
