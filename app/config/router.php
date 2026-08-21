@@ -24,6 +24,7 @@ $router->add('/ingress/{id:[0-9]+}/edit', ['controller' => 'ingress', 'action' =
 $router->add('/ingress/{id:[0-9]+}/update', ['controller' => 'ingress', 'action' => 'update'])->via(['POST']);
 $router->add('/ingress/{id:[0-9]+}/delete', ['controller' => 'ingress', 'action' => 'delete'])->via(['POST']);
 $router->add('/ingress/{id:[0-9]+}/retry', ['controller' => 'ingress', 'action' => 'retry'])->via(['POST']);
+$router->add('/ingress/{id:[0-9]+}/renew', ['controller' => 'ingress', 'action' => 'renew'])->via(['POST']);
 $router->add('/ingress/toggle-bot', ['controller' => 'ingress', 'action' => 'toggleBot'])->via(['POST']);
 $router->add('/ingress/export', ['controller' => 'ingress', 'action' => 'export'])->via(['GET']);
 $router->add('/ingress/bulk-delete', ['controller' => 'ingress', 'action' => 'bulkDelete'])->via(['POST']);

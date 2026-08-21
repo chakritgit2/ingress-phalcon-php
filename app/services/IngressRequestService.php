@@ -247,6 +247,53 @@ class IngressRequestService
         }
     }
 
+    /**
+     * Pushes $row->expires_at back by $additionalMinutes — nothing else. No
+     * k8s_commands row, no bot involvement: the live Service/Ingress is
+     * already up, and expires_at is purely a DB-tracked deadline enforced
+     * by KubernetesTask::pruneExpiredAction() (see k8s/cronjob.yaml), so
+     * extending it is a plain row update.
+     */
+    public function renew(IngressRequests $row, int $additionalMinutes, Users $user): void
+    {
+        if ($row->status !== 'active') {
+            throw new \RuntimeException('ต่ออายุได้เฉพาะรายการที่สถานะเป็น active');
+        }
+        if ($additionalMinutes < 1 || $additionalMinutes > self::MAX_SCHEDULE_MINUTES) {
+            throw new \InvalidArgumentException('จำนวนนาทีที่ต่ออายุต้องอยู่ระหว่าง 1-' . self::MAX_SCHEDULE_MINUTES);
+        }
+
+        $oldExpiresAt = $row->expires_at;
+
+        // max() guards against extending off an expires_at that's already
+        // in the past (e.g. the sweeper hasn't ticked yet this minute) —
+        // otherwise a small enough $additionalMinutes could land the new
+        // expires_at back in the past too.
+        $base = max(strtotime($row->expires_at), time());
+        $row->expires_at = date('Y-m-d H:i:s', $base + $additionalMinutes * 60);
+
+        if (!$row->save()) {
+            throw new \RuntimeException(implode(', ', array_map(
+                fn ($m) => $m->getMessage(),
+                $row->getMessages()
+            )));
+        }
+
+        $this->auditLogService->log('ingress_renewed', AuditLogService::actorLabelFor($user), [
+            'ingress_request_id' => $row->id,
+            'actor_user_id' => $user->id,
+            'namespace' => $row->namespace,
+            'deployment_name' => $row->deployment_name,
+            'node_port' => $row->node_port,
+            'node_ip' => $row->node_ip,
+            'detail' => [
+                'added_minutes' => $additionalMinutes,
+                'old_expires_at' => $oldExpiresAt,
+                'new_expires_at' => $row->expires_at,
+            ],
+        ]);
+    }
+
     public function deleteManually(IngressRequests $row, Users $user): void
     {
         $row->status = 'deleting';

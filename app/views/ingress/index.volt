@@ -164,6 +164,17 @@
                     </a>
                     {% endif %}
                     {% if row.status == 'active' and currentUser.isDevops() %}
+                    <form class="renewForm inline" method="post" action="/ingress/{{ row.id }}/renew">
+                        <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
+                        <input type="hidden" name="additional_minutes" class="renewMinutesInput" value="">
+                        <button type="button" class="renewBtn inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20">
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"/>
+                                <path stroke-linecap="round" d="M12 7v5l3 3"/>
+                            </svg>
+                            ต่ออายุ
+                        </button>
+                    </form>
                     <form class="inline" method="post" action="/ingress/{{ row.id }}/delete" onsubmit="return confirm('ยืนยันลบ?');">
                         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
                         <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20">
@@ -234,6 +245,31 @@ function initBulkControls() {
 }
 
 initBulkControls();
+
+// Same re-run-after-live-refresh need as initBulkControls() above — the
+// renew buttons live inside the swapped <tbody>.
+function initRenewControls() {
+    document.querySelectorAll('.renewBtn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var minutes = prompt('ต่ออายุกี่นาที? (1-10080)', '60');
+            if (minutes === null) {
+                return;
+            }
+
+            var parsed = parseInt(minutes, 10);
+            if (!Number.isInteger(parsed) || String(parsed) !== minutes.trim() || parsed < 1 || parsed > 10080) {
+                alert('กรุณาระบุจำนวนนาทีที่ถูกต้อง (1-10080)');
+                return;
+            }
+
+            var form = btn.closest('form');
+            form.querySelector('.renewMinutesInput').value = parsed;
+            form.submit();
+        });
+    });
+}
+
+initRenewControls();
 </script>
 {% endif %}
 
@@ -274,6 +310,9 @@ initBulkControls();
                 });
                 if (typeof initBulkControls === 'function') {
                     initBulkControls();
+                }
+                if (typeof initRenewControls === 'function') {
+                    initRenewControls();
                 }
             })
             .catch(function () {})
