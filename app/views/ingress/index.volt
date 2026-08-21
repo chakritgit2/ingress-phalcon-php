@@ -220,34 +220,83 @@
     right: auto;
     bottom: auto;
     margin: 0;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%) scale(1);
+}
+
+/* Progressive enhancement only — unsupported browsers (no @starting-style)
+   just skip straight to the end state above with no animation, still fine. */
+@starting-style {
+    #renewDialog[open] {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.96);
+    }
+}
+#renewDialog {
+    opacity: 1;
+    transition: opacity 0.15s ease-out, transform 0.15s ease-out, overlay 0.15s ease-out allow-discrete, display 0.15s ease-out allow-discrete;
+}
+#renewDialog::backdrop {
+    transition: background-color 0.15s ease-out;
 }
 </style>
-<dialog id="renewDialog" class="w-full max-w-sm rounded-xl border border-gray-200 bg-white p-0 shadow-xl backdrop:bg-black/40 dark:border-gray-700 dark:bg-gray-900">
-    <form id="renewForm" method="post" class="p-5">
+<dialog id="renewDialog" class="w-full max-w-sm overflow-hidden rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/50 dark:border-gray-700 dark:bg-gray-900">
+    <form id="renewForm" method="post">
         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
         <input type="hidden" name="additional_minutes" id="renewMinutesInput" value="">
 
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-white">ต่ออายุ Ingress</h3>
-        <p class="mb-4 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-            <span id="renewDeveloperName"></span> &middot; หมดอายุปัจจุบัน <span id="renewCurrentExpiry" class="font-medium text-gray-700 dark:text-gray-300"></span>
-        </p>
-
-        <div class="mb-4 flex flex-wrap gap-1.5">
-            <button type="button" class="renewPresetBtn rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="60">+1 ชม.</button>
-            <button type="button" class="renewPresetBtn rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="360">+6 ชม.</button>
-            <button type="button" class="renewPresetBtn rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="1440">+1 วัน</button>
-            <button type="button" class="renewPresetBtn rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="4320">+3 วัน</button>
-            <button type="button" class="renewPresetBtn rounded-full border border-gray-300 bg-white px-3 py-1 text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="10080">+7 วัน</button>
+        <div class="flex items-start gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path stroke-linecap="round" d="M12 7v5l3 3"/>
+                </svg>
+            </span>
+            <div class="min-w-0 flex-1 pt-0.5">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">ต่ออายุ Ingress</h3>
+                <p id="renewDeveloperName" class="truncate text-xs text-gray-500 dark:text-gray-400"></p>
+            </div>
+            <button type="button" id="renewCloseBtn" aria-label="ปิด" class="-m-1.5 shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
+                </svg>
+            </button>
         </div>
 
-        <label class="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300" for="renewDatetimeInput">หรือกำหนดวันเวลาหมดอายุใหม่เอง</label>
-        <input type="datetime-local" id="renewDatetimeInput" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
-        <p id="renewPreview" class="mt-1.5 min-h-[1rem] text-xs text-gray-500 dark:text-gray-400"></p>
+        <div class="px-5 py-4">
+            <div class="mb-4 flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2 text-xs dark:bg-gray-800/60">
+                <span class="text-gray-500 dark:text-gray-400">หมดอายุปัจจุบัน</span>
+                <span id="renewCurrentExpiry" class="font-medium text-gray-700 dark:text-gray-200"></span>
+            </div>
 
-        <div class="mt-4 flex justify-end gap-2">
-            <button type="button" id="renewCancelBtn" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">ยกเลิก</button>
-            <button type="submit" id="renewSubmitBtn" disabled class="inline-flex items-center rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-40">ต่ออายุ</button>
+            <p class="mb-2 text-xs font-medium text-gray-600 dark:text-gray-400">ต่ออายุแบบด่วน</p>
+            <div class="mb-4 grid grid-cols-5 gap-1.5">
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="60">1 ชม.</button>
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="360">6 ชม.</button>
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="1440">1 วัน</button>
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="4320">3 วัน</button>
+                <button type="button" class="renewPresetBtn rounded-lg border border-gray-200 bg-white py-2 text-center text-xs font-medium text-gray-700 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:border-emerald-500/30 dark:hover:bg-emerald-500/10 dark:hover:text-emerald-400" data-minutes="10080">7 วัน</button>
+            </div>
+
+            <div class="mb-3 flex items-center gap-2">
+                <div class="h-px flex-1 bg-gray-100 dark:bg-gray-800"></div>
+                <span class="text-[11px] text-gray-400 dark:text-gray-500">หรือกำหนดเอง</span>
+                <div class="h-px flex-1 bg-gray-100 dark:bg-gray-800"></div>
+            </div>
+
+            <input type="datetime-local" id="renewDatetimeInput" aria-label="วันเวลาหมดอายุใหม่" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+
+            <p id="renewPreview" class="mt-3 hidden items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium"></p>
+        </div>
+
+        <div class="flex justify-end gap-2 border-t border-gray-100 bg-gray-50/60 px-5 py-3 dark:border-gray-800 dark:bg-gray-800/30">
+            <button type="button" id="renewCancelBtn" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">ยกเลิก</button>
+            <button type="submit" id="renewSubmitBtn" disabled class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none dark:disabled:bg-gray-700">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="9"/>
+                    <path stroke-linecap="round" d="M12 7v5l3 3"/>
+                </svg>
+                ต่ออายุ
+            </button>
         </div>
     </form>
 </dialog>
@@ -301,6 +350,7 @@ initBulkControls();
     var preview = document.getElementById('renewPreview');
     var submitBtn = document.getElementById('renewSubmitBtn');
     var cancelBtn = document.getElementById('renewCancelBtn');
+    var closeBtn = document.getElementById('renewCloseBtn');
     var currentExpiresAt = null;
     var maxMinutes = 10080;
 
@@ -315,17 +365,36 @@ initBulkControls();
             + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
     }
 
-    function setPreview(text, isError) {
+    // state: null hides the box entirely, 'error' (red) or 'success' (emerald)
+    // otherwise — matches the disabled/enabled state of the submit button.
+    function setPreview(text, state) {
+        if (!text) {
+            preview.classList.add('hidden');
+            preview.classList.remove('flex');
+            preview.textContent = '';
+            return;
+        }
+
         preview.textContent = text;
-        preview.classList.toggle('text-red-500', !!isError);
-        preview.classList.toggle('dark:text-red-400', !!isError);
+        preview.classList.remove('hidden');
+        preview.classList.add('flex');
+
+        var isError = state === 'error';
+        preview.classList.toggle('bg-red-50', isError);
+        preview.classList.toggle('text-red-600', isError);
+        preview.classList.toggle('dark:bg-red-500/10', isError);
+        preview.classList.toggle('dark:text-red-400', isError);
+        preview.classList.toggle('bg-emerald-50', !isError);
+        preview.classList.toggle('text-emerald-700', !isError);
+        preview.classList.toggle('dark:bg-emerald-500/10', !isError);
+        preview.classList.toggle('dark:text-emerald-400', !isError);
     }
 
     function applyMinutes(minutes) {
         if (!Number.isInteger(minutes) || minutes < 1 || minutes > maxMinutes) {
             minutesInput.value = '';
             submitBtn.disabled = true;
-            setPreview('กรุณาเลือกเวลาใหม่ที่มากกว่าเวลาเดิม ไม่เกิน ' + maxMinutes + ' นาที (7 วัน)', true);
+            setPreview('เลือกเวลาใหม่ที่มากกว่าเวลาเดิม ไม่เกิน 7 วัน', 'error');
             return;
         }
 
@@ -338,14 +407,14 @@ initBulkControls();
         if (days) parts.push(days + ' วัน');
         if (hours) parts.push(hours + ' ชม.');
         if (mins || parts.length === 0) parts.push(mins + ' นาที');
-        setPreview('ต่ออายุ ' + parts.join(' ') + ' — หมดอายุใหม่: ' + datetimeInput.value.replace('T', ' '), false);
+        setPreview('หมดอายุใหม่ ' + datetimeInput.value.replace('T', ' ') + ' (+' + parts.join(' ') + ')', 'success');
     }
 
     function onDatetimeChange() {
         if (!datetimeInput.value || !currentExpiresAt) {
             minutesInput.value = '';
             submitBtn.disabled = true;
-            setPreview('', false);
+            setPreview('', null);
             return;
         }
 
@@ -367,6 +436,9 @@ initBulkControls();
     cancelBtn.addEventListener('click', function () {
         dialog.close();
     });
+    closeBtn.addEventListener('click', function () {
+        dialog.close();
+    });
     // showModal()'s ::backdrop covers the full viewport regardless of where
     // the dialog itself is positioned — clicking it (not the form inside)
     // closes the dialog, same as clicking Cancel.
@@ -385,7 +457,7 @@ initBulkControls();
         datetimeInput.value = '';
         minutesInput.value = '';
         submitBtn.disabled = true;
-        setPreview('', false);
+        setPreview('', null);
         // showModal()'s default UA styling (position: fixed; inset: 0;
         // margin: auto) already dead-centers <dialog> in the viewport —
         // no extra positioning needed.
