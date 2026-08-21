@@ -180,16 +180,19 @@ class IngressRequestService
         if (!in_array($requestType, ['nodeport', 'ingress'], true)) {
             throw new \InvalidArgumentException('ประเภท Ingress ไม่ถูกต้อง');
         }
-        if ($requestType === 'ingress') {
-            if ($host === '') {
-                throw new \InvalidArgumentException('กรุณาระบุ Host (โดเมน)');
-            }
-            if (!preg_match(self::DNS_1123_SUBDOMAIN, $host) || strlen($host) > 253) {
-                throw new \InvalidArgumentException('รูปแบบ Host ไม่ถูกต้อง — ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)');
-            }
-            if ($secretName === '') {
-                throw new \InvalidArgumentException('กรุณาเลือก Secret Name (TLS)');
-            }
+        // Host is required for every type, not just 'ingress' — it doubles
+        // as the uniquekey registered in the line_login collection (see
+        // LineLoginService), which every provisioned domain needs
+        // regardless of whether it's fronted by a real k8s Ingress or a
+        // NodePort Service.
+        if ($host === '') {
+            throw new \InvalidArgumentException('กรุณาระบุ Host (โดเมน)');
+        }
+        if (!preg_match(self::DNS_1123_SUBDOMAIN, $host) || strlen($host) > 253) {
+            throw new \InvalidArgumentException('รูปแบบ Host ไม่ถูกต้อง — ใส่แค่ชื่อโดเมน เช่น myapp.advws.com (ห้ามมี http:// หรือ / ต่อท้าย)');
+        }
+        if ($requestType === 'ingress' && $secretName === '') {
+            throw new \InvalidArgumentException('กรุณาเลือก Secret Name (TLS)');
         }
 
         return [
@@ -198,7 +201,7 @@ class IngressRequestService
             'deployment_name' => $deploymentName,
             'request_type' => $requestType,
             'target_port' => $targetPort,
-            'host' => $requestType === 'ingress' ? $host : null,
+            'host' => $host,
             'secret_name' => $requestType === 'ingress' ? $secretName : null,
             'schedule_end_minutes' => $scheduleMinutes,
             'note' => $note !== '' ? $note : null,

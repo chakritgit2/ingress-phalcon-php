@@ -8,9 +8,11 @@ use App\Services\IngressRequestService;
 use App\Services\K8sConfigResolver;
 use App\Services\KubernetesClient;
 use App\Services\KubernetesService;
+use App\Services\LineLoginService;
 use App\Services\MockKubernetesService;
 use App\Services\SettingsService;
 use App\Services\UsersService;
+use MongoDB\Client as MongoClient;
 use Phalcon\Cache\Cache;
 use Phalcon\Db\Adapter\Pdo\Mysql as MysqlAdapter;
 use Phalcon\Di\FactoryDefault;
@@ -76,6 +78,20 @@ $di->setShared('db', function () use ($config) {
         'charset'  => $config->database->charset,
     ];
     return new MysqlAdapter($params);
+});
+
+$di->setShared('mongo', function () use ($config) {
+    $auth = $config->mongo->username !== ''
+        ? rawurlencode($config->mongo->username) . ':' . rawurlencode($config->mongo->password) . '@'
+        : '';
+    $uri = "mongodb://{$auth}{$config->mongo->host}:{$config->mongo->port}";
+
+    $client = new MongoClient($uri);
+    return $client->selectDatabase($config->mongo->dbname);
+});
+
+$di->setShared('lineLoginService', function () {
+    return new LineLoginService($this->get('mongo'));
 });
 
 $di->setShared('modelsMetadata', fn () => new MetaDataMemory());

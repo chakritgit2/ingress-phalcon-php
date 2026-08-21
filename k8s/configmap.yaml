@@ -6,6 +6,9 @@ metadata:
 data:
   K8S_NODE_IP: "192.168.33.31"
   BASE_URI: "/"
+  MONGO_HOST: "192.168.33.31"
+  MONGO_PORT: "50102"
+  MONGO_DB: "ai"
   GOOGLE_HD: "advws.com"
   GOOGLE_REDIRECT_URI: "http://192.168.33.31:PLACEHOLDER/login/google/callback"
   # This deployment is reached via a plain IP:NodePort with no domain/TLS —
