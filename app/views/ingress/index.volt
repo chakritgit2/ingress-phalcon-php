@@ -361,33 +361,6 @@ initBulkControls();
         }
     });
 
-    // Anchored next to the row's own button instead of the browser's
-    // default dead-center placement, so it stays visually tied to the row
-    // being renewed. Clamped to the viewport, flipping above the button
-    // when there isn't enough room below.
-    function positionNear(btn) {
-        var margin = 8;
-        var btnRect = btn.getBoundingClientRect();
-        var dialogRect = dialog.getBoundingClientRect();
-
-        var left = Math.min(
-            Math.max(margin, btnRect.left),
-            window.innerWidth - dialogRect.width - margin
-        );
-
-        var top = btnRect.bottom + margin;
-        if (top + dialogRect.height > window.innerHeight - margin) {
-            top = btnRect.top - dialogRect.height - margin;
-        }
-        top = Math.max(margin, top);
-
-        dialog.style.position = 'fixed';
-        dialog.style.inset = 'auto';
-        dialog.style.margin = '0';
-        dialog.style.top = top + 'px';
-        dialog.style.left = left + 'px';
-    }
-
     window.openRenewDialog = function (btn) {
         currentExpiresAt = new Date(btn.dataset.expiresAt.replace(' ', 'T'));
         form.action = '/ingress/' + btn.dataset.id + '/renew';
@@ -398,8 +371,10 @@ initBulkControls();
         minutesInput.value = '';
         submitBtn.disabled = true;
         setPreview('', false);
+        // showModal()'s default UA styling (position: fixed; inset: 0;
+        // margin: auto) already dead-centers <dialog> in the viewport —
+        // no extra positioning needed.
         dialog.showModal();
-        positionNear(btn);
     };
 })();
 
