@@ -215,6 +215,8 @@
     </table>
 </div>
 
+{% include "partials/pagination" with ["page": page, "totalPages": totalPages, "totalItems": totalItems, "pageNumbers": pageNumbers, "baseUrl": "/ingress", "extraParams": {"namespace": filterNamespace, "developer_name": filterDeveloperName, "status": filterStatus}] %}
+
 {% if currentUser.isDevops() %}
 <style>
 /* The browser's default dialog:modal centering is a `margin: auto` trick,
@@ -487,10 +489,14 @@ initRenewTriggers();
 </script>
 {% endif %}
 
+{% if page == 1 %}
 <script>
 // Live status updates: the /ingress table doesn't otherwise reflect status
 // changes (pending -> active/failed, active -> expired/deleted) until the
 // page is manually reloaded. See app/controllers/EventsController.php.
+// Page 1 only — new rows always land at the top there; deeper pages would
+// just get their rows shuffled underneath the reader (see the same guard
+// in audit/security.volt).
 (function () {
     var tbody = document.querySelector('table tbody');
     if (!tbody || typeof EventSource === 'undefined') {
@@ -536,4 +542,5 @@ initRenewTriggers();
     new EventSource('/events/stream?channel=ingress').addEventListener('update', refresh);
 })();
 </script>
+{% endif %}
 {% endblock %}

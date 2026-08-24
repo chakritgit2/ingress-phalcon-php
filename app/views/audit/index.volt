@@ -60,8 +60,5 @@
     </table>
 </div>
 
-<p class="mt-4 flex gap-3">
-    {% if page > 1 %}<a class="inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700" href="/audit?page={{ page - 1 }}">&laquo; ก่อนหน้า</a>{% endif %}
-    {% if rows|length >= 50 %}<a class="inline-flex shrink-0 items-center whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700" href="/audit?page={{ page + 1 }}">ถัดไป &raquo;</a>{% endif %}
-</p>
+{% include "partials/pagination" with ["page": page, "totalPages": totalPages, "totalItems": totalItems, "pageNumbers": pageNumbers, "baseUrl": "/audit"] %}
 {% endblock %}

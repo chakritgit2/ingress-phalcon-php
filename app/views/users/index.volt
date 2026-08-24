@@ -51,4 +51,6 @@
         </tbody>
     </table>
 </div>
+
+{% include "partials/pagination" with ["page": page, "totalPages": totalPages, "totalItems": totalItems, "pageNumbers": pageNumbers, "baseUrl": "/users"] %}
 {% endblock %}
