@@ -23,7 +23,7 @@ class IngressController extends ControllerBase
         $filters = $this->readFilters();
         [$conditions, $bind] = $this->filterConditions($filters);
 
-        $findParams = ['order' => 'created_at DESC', 'limit' => 100];
+        $findParams = ['order' => 'created_at DESC', 'limit' => 100, 'with' => ['creator']];
         if ($conditions !== []) {
             $findParams['conditions'] = implode(' AND ', $conditions);
             $findParams['bind'] = $bind;
@@ -63,7 +63,7 @@ class IngressController extends ControllerBase
         $filters = $this->readFilters();
         [$conditions, $bind] = $this->filterConditions($filters);
 
-        $findParams = ['order' => 'created_at DESC', 'limit' => self::EXPORT_ROW_LIMIT];
+        $findParams = ['order' => 'created_at DESC', 'limit' => self::EXPORT_ROW_LIMIT, 'with' => ['creator']];
         if ($conditions !== []) {
             $findParams['conditions'] = implode(' AND ', $conditions);
             $findParams['bind'] = $bind;
@@ -76,6 +76,7 @@ class IngressController extends ControllerBase
             $csvRows[] = [
                 $row->id,
                 $row->developer_name,
+                $row->creator ? $row->creator->email : '',
                 $row->deployment_name,
                 $row->namespace,
                 $row->request_type,
@@ -89,8 +90,64 @@ class IngressController extends ControllerBase
 
         return $this->csvResponse(
             'ingress-export-' . date('Ymd-His') . '.csv',
-            ['ID', 'Developer', 'Deployment', 'Namespace', 'Type', 'Address', 'Note', 'Created At', 'Expires At', 'Status'],
+            ['ID', 'Developer', 'Created By', 'Deployment', 'Namespace', 'Type', 'Address', 'Note', 'Created At', 'Expires At', 'Status'],
             $csvRows
+        );
+    }
+
+    /**
+     * One row per namespace + deployment that actually exists on the
+     * cluster (not just ones with a past ingress request — a namespace/
+     * deployment that never had one would otherwise be missing entirely),
+     * annotated with how many ingress requests exist for it, if any.
+     */
+    public function groupsExportAction()
+    {
+        try {
+            $namespaces = $this->kubernetesService->listNamespaces();
+            $deployments = $this->kubernetesService->listAllDeployments();
+        } catch (\Throwable $e) {
+            $this->flash->error('ดึงข้อมูล namespace/deployment จาก Kubernetes ไม่สำเร็จ: ' . $e->getMessage());
+            return $this->redirectBack();
+        }
+
+        $namespaceFilter = trim((string) $this->request->getQuery('namespace', 'string', ''));
+
+        $requestCounts = [];
+        foreach (IngressRequests::find(['columns' => 'namespace, deployment_name, status']) as $row) {
+            $key = $row->namespace . '|' . $row->deployment_name;
+            if (!isset($requestCounts[$key])) {
+                $requestCounts[$key] = ['total' => 0, 'active' => 0];
+            }
+            $requestCounts[$key]['total']++;
+            if ($row->status === 'active') {
+                $requestCounts[$key]['active']++;
+            }
+        }
+
+        $deploymentsByNamespace = [];
+        foreach ($deployments as $deployment) {
+            $deploymentsByNamespace[$deployment['namespace']][] = $deployment['name'];
+        }
+
+        $groups = [];
+        foreach ($namespaces as $namespace) {
+            if ($namespaceFilter !== '' && stripos($namespace, $namespaceFilter) === false) {
+                continue;
+            }
+
+            $deploymentNames = $deploymentsByNamespace[$namespace] ?? [''];
+            foreach ($deploymentNames as $deploymentName) {
+                $key = $namespace . '|' . $deploymentName;
+                $counts = $requestCounts[$key] ?? ['total' => 0, 'active' => 0];
+                $groups[] = [$namespace, $deploymentName, $counts['total'], $counts['active']];
+            }
+        }
+
+        return $this->csvResponse(
+            'ingress-groups-' . date('Ymd-His') . '.csv',
+            ['Namespace', 'Deployment', 'Total Requests', 'Active'],
+            $groups
         );
     }
 

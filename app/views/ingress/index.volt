@@ -78,6 +78,12 @@
         </svg>
         Export CSV
     </a>
+    <a href="/ingress/export-groups?namespace={{ filterNamespace|url_encode }}" class="inline-flex h-9 shrink-0 items-center self-end gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h10M4 18h6"/>
+        </svg>
+        Export by Namespace/Deployment
+    </a>
 </form>
 
 {% if currentUser.isDevops() %}
@@ -107,6 +113,7 @@
                 </th>
                 <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-gray-900 dark:text-gray-400">ID</th>
                 <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-gray-900 dark:text-gray-400">ใคร</th>
+                <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-gray-900 dark:text-gray-400">สร้างโดย</th>
                 <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-gray-900 dark:text-gray-400">ใช้อะไร</th>
                 <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-gray-900 dark:text-gray-400">Namespace</th>
                 <th class="sticky top-0 z-10 bg-gray-50 px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:bg-gray-900 dark:text-gray-400">ประเภท</th>
@@ -137,6 +144,7 @@
                         {% endif %}
                     </span>
                 </td>
+                <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.creator ? row.creator.email : '-' }}</td>
                 <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.deployment_name }}</td>
                 <td class="px-4 py-3 text-gray-700 dark:text-gray-300">{{ row.namespace }}</td>
                 <td class="px-4 py-3 text-gray-700 dark:text-gray-300">
