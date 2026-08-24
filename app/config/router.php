@@ -27,6 +27,7 @@ $router->add('/ingress/{id:[0-9]+}/retry', ['controller' => 'ingress', 'action' 
 $router->add('/ingress/{id:[0-9]+}/renew', ['controller' => 'ingress', 'action' => 'renew'])->via(['POST']);
 $router->add('/ingress/toggle-bot', ['controller' => 'ingress', 'action' => 'toggleBot'])->via(['POST']);
 $router->add('/ingress/export', ['controller' => 'ingress', 'action' => 'export'])->via(['GET']);
+$router->add('/ingress/export-groups', ['controller' => 'ingress', 'action' => 'groupsExport'])->via(['GET']);
 $router->add('/ingress/bulk-delete', ['controller' => 'ingress', 'action' => 'bulkDelete'])->via(['POST']);
 $router->add('/ingress/bulk-retry', ['controller' => 'ingress', 'action' => 'bulkRetry'])->via(['POST']);
 
