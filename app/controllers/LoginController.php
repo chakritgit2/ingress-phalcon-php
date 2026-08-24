@@ -56,6 +56,7 @@ class LoginController extends ControllerBase
             'actor_user_id' => $user->id,
         ]);
 
+        $this->flash->success('เข้าสู่ระบบสำเร็จ');
         return $this->response->redirect('/ingress');
     }
 
@@ -114,6 +115,7 @@ class LoginController extends ControllerBase
         }
 
         $this->authService->login($user);
+        $this->flash->success('เข้าสู่ระบบสำเร็จ (mock)');
         return $this->response->redirect('/ingress');
     }
 
@@ -172,6 +174,7 @@ class LoginController extends ControllerBase
             'actor_user_id' => $user->id,
         ]);
 
+        $this->flash->success('เข้าสู่ระบบสำเร็จ');
         return $this->response->redirect('/ingress');
     }
 
