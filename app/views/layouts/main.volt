@@ -2,6 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Ingress Self-Service</title>
     <script>
     (function () {
@@ -320,11 +321,11 @@
     </script>
 </head>
 <body class="min-h-screen bg-gray-50 font-sans text-gray-900 antialiased dark:bg-gray-950 dark:text-gray-100">
-<header class="sticky top-0 z-10 flex items-center justify-between bg-gray-900 px-6 py-4 shadow-md">
-    <div class="flex items-center">
+<header class="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 bg-gray-900 px-4 py-3 shadow-md sm:px-6 sm:py-4">
+    <div class="flex flex-wrap items-center gap-y-2">
         <span class="mr-6 text-base font-semibold tracking-tight text-white">Ingress Self-Service</span>
         {% if currentUser is defined and currentUser %}
-        <nav class="flex items-center gap-1">
+        <nav class="flex flex-wrap items-center gap-1">
             <a class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition {{ dispatcher.getControllerName() == 'ingress' ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/10 hover:text-white' }}" href="/ingress">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
                     <circle cx="5" cy="12" r="2.5"/>
@@ -354,7 +355,7 @@
         </nav>
         {% endif %}
     </div>
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center gap-3">
         <button type="button" id="themeToggle" aria-label="สลับธีมสว่าง/มืด" class="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-lg border border-white/20 bg-white/5 p-2 text-white transition hover:bg-white/10">
             <svg id="themeIconSun" class="hidden h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
                 <circle cx="12" cy="12" r="4"/>

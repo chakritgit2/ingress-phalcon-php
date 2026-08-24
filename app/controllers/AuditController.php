@@ -8,11 +8,13 @@ use App\Models\K8sCommands;
 
 class AuditController extends ControllerBase
 {
-    private const PAGE_SIZE = 50;
+    private const PAGE_SIZE = 20;
 
     // Safety bound on securityExportAction() — see IngressController's
     // matching EXPORT_ROW_LIMIT for the same reasoning.
     private const EXPORT_ROW_LIMIT = 5000;
+
+    private const SECURITY_EVENT_CONDITIONS = "event_type IN ('login', 'login_rejected', 'bot_enabled', 'bot_disabled', 'user_role_changed', 'user_activated', 'user_deactivated', 'user_password_reset', 'user_email_changed')";
 
     public function indexAction(): void
     {
@@ -24,8 +26,14 @@ class AuditController extends ControllerBase
             'offset' => (self::PAGE_SIZE) * ($page - 1),
         ]);
 
+        $totalItems = (int) IngressRequests::count();
+        $totalPages = max(1, (int) ceil($totalItems / self::PAGE_SIZE));
+
         $this->view->setVar('rows', $rows);
         $this->view->setVar('page', $page);
+        $this->view->setVar('totalItems', $totalItems);
+        $this->view->setVar('totalPages', $totalPages);
+        $this->view->setVar('pageNumbers', $this->paginationPages($page, $totalPages));
     }
 
     /**
@@ -39,20 +47,26 @@ class AuditController extends ControllerBase
         $page = max(1, (int) $this->request->getQuery('page', 'int', 1));
 
         $events = AuditLog::find([
-            'conditions' => "event_type IN ('login', 'login_rejected', 'bot_enabled', 'bot_disabled', 'user_role_changed', 'user_activated', 'user_deactivated', 'user_password_reset', 'user_email_changed')",
+            'conditions' => self::SECURITY_EVENT_CONDITIONS,
             'order' => 'created_at DESC',
             'limit' => self::PAGE_SIZE,
             'offset' => self::PAGE_SIZE * ($page - 1),
         ]);
 
+        $totalItems = (int) AuditLog::count(['conditions' => self::SECURITY_EVENT_CONDITIONS]);
+        $totalPages = max(1, (int) ceil($totalItems / self::PAGE_SIZE));
+
         $this->view->setVar('events', $events);
         $this->view->setVar('page', $page);
+        $this->view->setVar('totalItems', $totalItems);
+        $this->view->setVar('totalPages', $totalPages);
+        $this->view->setVar('pageNumbers', $this->paginationPages($page, $totalPages));
     }
 
     public function securityExportAction()
     {
         $events = AuditLog::find([
-            'conditions' => "event_type IN ('login', 'login_rejected', 'bot_enabled', 'bot_disabled', 'user_role_changed', 'user_activated', 'user_deactivated', 'user_password_reset', 'user_email_changed')",
+            'conditions' => self::SECURITY_EVENT_CONDITIONS,
             'order' => 'created_at DESC',
             'limit' => self::EXPORT_ROW_LIMIT,
         ]);

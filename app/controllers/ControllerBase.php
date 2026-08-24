@@ -41,4 +41,23 @@ class ControllerBase extends Controller
 
         return $this->response;
     }
+
+    /**
+     * Page numbers for partials/pagination.volt to render: always the first
+     * and last page, plus a window around the current page, with 0 marking
+     * a collapsed gap (rendered as "…") — keeps the control usable when
+     * there are hundreds of pages instead of dumping every number in the DOM.
+     */
+    protected function paginationPages(int $page, int $totalPages, int $window = 2): array
+    {
+        $pages = [];
+        for ($p = 1; $p <= $totalPages; $p++) {
+            if ($p === 1 || $p === $totalPages || ($p >= $page - $window && $p <= $page + $window)) {
+                $pages[] = $p;
+            } elseif (end($pages) !== 0) {
+                $pages[] = 0;
+            }
+        }
+        return $pages;
+    }
 }

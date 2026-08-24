@@ -6,10 +6,26 @@ use App\Models\Users;
 
 class UsersController extends ControllerBase
 {
+    private const PAGE_SIZE = 20;
+
     public function indexAction(): void
     {
-        $rows = Users::find(['order' => 'role DESC, email ASC']);
+        $page = max(1, (int) $this->request->getQuery('page', 'int', 1));
+
+        $rows = Users::find([
+            'order' => 'role DESC, email ASC',
+            'limit' => self::PAGE_SIZE,
+            'offset' => self::PAGE_SIZE * ($page - 1),
+        ]);
+
+        $totalItems = (int) Users::count();
+        $totalPages = max(1, (int) ceil($totalItems / self::PAGE_SIZE));
+
         $this->view->setVar('rows', $rows);
+        $this->view->setVar('page', $page);
+        $this->view->setVar('totalItems', $totalItems);
+        $this->view->setVar('totalPages', $totalPages);
+        $this->view->setVar('pageNumbers', $this->paginationPages($page, $totalPages));
     }
 
     public function editAction($id): void

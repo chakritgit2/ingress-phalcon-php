@@ -18,18 +18,31 @@ class IngressController extends ControllerBase
     // unbounded query, not a real usage limit.
     private const EXPORT_ROW_LIMIT = 5000;
 
+    private const PAGE_SIZE = 20;
+
     public function indexAction(): void
     {
         $filters = $this->readFilters();
         [$conditions, $bind] = $this->filterConditions($filters);
 
-        $findParams = ['order' => 'created_at DESC', 'limit' => 100, 'with' => ['creator']];
+        $page = max(1, (int) $this->request->getQuery('page', 'int', 1));
+
+        $findParams = [
+            'order' => 'created_at DESC',
+            'limit' => self::PAGE_SIZE,
+            'offset' => self::PAGE_SIZE * ($page - 1),
+            'with' => ['creator'],
+        ];
         if ($conditions !== []) {
             $findParams['conditions'] = implode(' AND ', $conditions);
             $findParams['bind'] = $bind;
         }
 
         $rows = IngressRequests::find($findParams);
+
+        $countParams = $conditions !== [] ? ['conditions' => implode(' AND ', $conditions), 'bind' => $bind] : [];
+        $totalItems = (int) IngressRequests::count($countParams);
+        $totalPages = max(1, (int) ceil($totalItems / self::PAGE_SIZE));
 
         $editableIds = [];
         foreach ($rows as $row) {
@@ -49,6 +62,10 @@ class IngressController extends ControllerBase
         }
 
         $this->view->setVar('rows', $rows);
+        $this->view->setVar('page', $page);
+        $this->view->setVar('totalItems', $totalItems);
+        $this->view->setVar('totalPages', $totalPages);
+        $this->view->setVar('pageNumbers', $this->paginationPages($page, $totalPages));
         $this->view->setVar('editableIds', $editableIds);
         $this->view->setVar('botEnabled', $botEnabled);
         $this->view->setVar('botKillSwitchActive', $this->settingsService->isEnvKillSwitchActive());
