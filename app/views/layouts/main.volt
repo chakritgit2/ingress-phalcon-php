@@ -379,7 +379,17 @@
     </div>
 </header>
 <main class="mx-auto my-8 {% block container_class %}max-w-4xl{% endblock %} px-4">
+    {% set flashMessages = flash.getMessages(null, false) %}
     <div class="animate-fade-in">{{ flash.output() }}</div>
+    {% if flashMessages %}
+    <script>
+        {% for type, messages in flashMessages %}
+        {% for msg in messages %}
+        console.log('[flash:{{ type }}]', {{ msg|json_encode }});
+        {% endfor %}
+        {% endfor %}
+    </script>
+    {% endif %}
     <div class="animate-fade-in rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-900 dark:ring-gray-800">
         {% block content %}{% endblock %}
     </div>
