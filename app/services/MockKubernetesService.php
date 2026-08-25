@@ -101,7 +101,7 @@ class MockKubernetesService implements KubernetesServiceInterface
         return self::SECRETS[$namespace] ?? [];
     }
 
-    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId): array
+    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true): array
     {
         $exists = array_filter(
             self::DEPLOYMENTS[$namespace] ?? [],
@@ -113,7 +113,7 @@ class MockKubernetesService implements KubernetesServiceInterface
 
         $suffix = substr(bin2hex(random_bytes(4)), 0, 6);
 
-        $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName);
+        $nodeAdminPath = $manageNodeAdminPath ? $this->syncNodeAdminPathEnv($namespace, $deploymentName) : null;
 
         $resolvedTargetPort = $this->resolveTargetPort(array_shift($exists));
 
@@ -143,7 +143,7 @@ class MockKubernetesService implements KubernetesServiceInterface
 
         return [
             'service_name' => "tmp-nodeport-{$suffix}",
-            'node_port' => random_int(30000, 32767),
+            'node_port' => $preferredNodePort ?? random_int(30000, 32767),
             'k8s_uid' => sprintf(
                 '%08x-%04x-%04x-%04x-%012x',
                 random_int(0, 0xffffffff),
@@ -166,7 +166,7 @@ class MockKubernetesService implements KubernetesServiceInterface
         // No-op: nothing real to delete.
     }
 
-    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId): array
+    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId, bool $manageNodeAdminPath = true): array
     {
         $exists = array_filter(
             self::DEPLOYMENTS[$namespace] ?? [],
@@ -180,7 +180,7 @@ class MockKubernetesService implements KubernetesServiceInterface
         $serviceName = "tmp-ingress-svc-{$suffix}";
         $ingressName = "tmp-ingress-{$suffix}";
 
-        $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName);
+        $nodeAdminPath = $manageNodeAdminPath ? $this->syncNodeAdminPathEnv($namespace, $deploymentName) : null;
 
         $resolvedTargetPort = $this->resolveTargetPort(array_shift($exists));
 

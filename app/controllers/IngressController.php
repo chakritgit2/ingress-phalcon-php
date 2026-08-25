@@ -391,6 +391,56 @@ class IngressController extends ControllerBase
         return $this->response->redirect('/ingress');
     }
 
+    public function holdOpenAction($id)
+    {
+        if (!$this->request->isPost() || !$this->security->checkToken()) {
+            $this->flash->error('คำขอไม่ถูกต้อง (CSRF)');
+            return $this->response->redirect('/ingress');
+        }
+
+        $row = IngressRequests::findFirst((int) $id);
+
+        if ($row === null || $row->status !== 'active') {
+            $this->flash->error('ไม่พบรายการ หรือรายการนี้ไม่ได้อยู่ในสถานะ active');
+            return $this->response->redirect('/ingress');
+        }
+
+        $until = $this->request->getPost('until', 'string', '');
+
+        try {
+            $this->ingressRequestService->holdOpen($row, $until, $this->currentUser());
+            $this->flash->success("เปิดค้างคืนแล้ว จนถึง {$row->schedule_hold_open_until}");
+        } catch (\Throwable $e) {
+            $this->flash->error('เปิดค้างคืนไม่สำเร็จ: ' . $e->getMessage());
+        }
+
+        return $this->response->redirect('/ingress');
+    }
+
+    public function reopenNowAction($id)
+    {
+        if (!$this->request->isPost() || !$this->security->checkToken()) {
+            $this->flash->error('คำขอไม่ถูกต้อง (CSRF)');
+            return $this->response->redirect('/ingress');
+        }
+
+        $row = IngressRequests::findFirst((int) $id);
+
+        if ($row === null || $row->status !== 'closed') {
+            $this->flash->error('ไม่พบรายการ หรือรายการนี้ไม่ได้อยู่ในสถานะปิดชั่วคราว');
+            return $this->response->redirect('/ingress');
+        }
+
+        try {
+            $this->ingressRequestService->requestManualReopen($row, $this->currentUser());
+            $this->flash->success('ส่งคำขอเปิดใช้งานแล้ว กำลังดำเนินการ (ภายใน 1 นาที)');
+        } catch (\Throwable $e) {
+            $this->flash->error('เปิดใช้งานไม่สำเร็จ: ' . $e->getMessage());
+        }
+
+        return $this->response->redirect('/ingress');
+    }
+
     public function retryAction($id)
     {
         if (!$this->request->isPost() || !$this->security->checkToken()) {

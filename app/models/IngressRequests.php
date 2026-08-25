@@ -24,6 +24,10 @@ class IngressRequests extends Model
     public int $created_by_user_id;
     public ?string $created_at = null;
     public ?string $expires_at = null;
+    public ?string $schedule_closed_at = null;
+    public ?string $schedule_hold_open_until = null;
+    public ?string $schedule_reopen_requested_at = null;
+    public ?int $schedule_reopen_requested_by_user_id = null;
     public string $status;
     public ?string $deleted_at = null;
     public ?string $deleted_by = null;
@@ -34,6 +38,7 @@ class IngressRequests extends Model
     {
         $this->setSource('ingress_requests');
         $this->belongsTo('created_by_user_id', Users::class, 'id', ['alias' => 'creator']);
+        $this->belongsTo('schedule_reopen_requested_by_user_id', Users::class, 'id', ['alias' => 'scheduleReopenRequestedBy']);
         $this->hasMany('id', AuditLog::class, 'ingress_request_id', ['alias' => 'auditEvents']);
         $this->hasMany('id', K8sCommands::class, 'ingress_request_id', ['alias' => 'commands']);
     }

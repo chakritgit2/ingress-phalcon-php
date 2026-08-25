@@ -133,13 +133,16 @@ class KubernetesService implements KubernetesServiceInterface
     }
 
     /**
-     * @return array{service_name: string, node_port: int, k8s_uid: string}
+     * @return array{service_name: string, node_port: int, k8s_uid: string, node_admin_path: ?array}
      */
-    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId): array
+    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true): array
     {
         $namespace = $this->assertValidLabel($namespace, 'namespace');
         $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
         $targetPort = $this->assertValidPort($targetPort);
+        if ($preferredNodePort !== null) {
+            $preferredNodePort = $this->assertValidPort($preferredNodePort);
+        }
 
         // Idempotency guard: if a previous attempt for this exact
         // ingress_requests row already created a Service (e.g. the bot
@@ -148,7 +151,7 @@ class KubernetesService implements KubernetesServiceInterface
         // a second, orphaned one.
         $existing = $this->findServiceByRequestId($namespace, $requestId);
         if ($existing !== null) {
-            return $existing;
+            return $existing + ['node_admin_path' => null];
         }
 
         $deployment = $this->getDeployment($namespace, $deploymentName);
@@ -161,13 +164,15 @@ class KubernetesService implements KubernetesServiceInterface
             throw new KubernetesApiException("Deployment {$deploymentName} has no matchLabels selector to target");
         }
 
-        $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName, $deployment);
+        $nodeAdminPath = $manageNodeAdminPath ? $this->syncNodeAdminPathEnv($namespace, $deploymentName, $deployment) : null;
 
         $resolvedTargetPort = $this->resolveTargetPort($deployment);
 
-        $body = $this->buildServiceBody($namespace, $deploymentName, $resolvedTargetPort, $requestId, $selector, 'tmp-nodeport-', 'NodePort');
+        $body = $this->buildServiceBody($namespace, $deploymentName, $resolvedTargetPort, $requestId, $selector, 'tmp-nodeport-', 'NodePort', $preferredNodePort);
 
-        $created = $this->client->post("/api/v1/namespaces/{$namespace}/services", $body);
+        $created = $preferredNodePort !== null
+            ? $this->postServiceWithPortFallback($namespace, $body, $preferredNodePort)
+            : $this->client->post("/api/v1/namespaces/{$namespace}/services", $body);
 
         return [
             'service_name' => $created['metadata']['name'],
@@ -178,9 +183,31 @@ class KubernetesService implements KubernetesServiceInterface
     }
 
     /**
-     * @return array{service_name: string, ingress_name: string, k8s_uid: string}
+     * Tries to (re)create the Service pinned to $preferredNodePort — used by
+     * the nightly reopen sweep so a developer's IP:port doesn't change every
+     * morning. If the k8s API rejects the pinned port (something else
+     * claimed it while this Service was closed overnight), retries once
+     * with no nodePort field so k8s assigns a fresh one instead of failing
+     * the whole reopen.
      */
-    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId): array
+    private function postServiceWithPortFallback(string $namespace, array $body, int $preferredNodePort): array
+    {
+        try {
+            return $this->client->post("/api/v1/namespaces/{$namespace}/services", $body);
+        } catch (KubernetesApiException $e) {
+            if (stripos($e->getMessage(), 'already allocated') === false) {
+                throw $e;
+            }
+
+            unset($body['spec']['ports'][0]['nodePort']);
+            return $this->client->post("/api/v1/namespaces/{$namespace}/services", $body);
+        }
+    }
+
+    /**
+     * @return array{service_name: string, ingress_name: string, k8s_uid: string, node_admin_path: ?array}
+     */
+    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId, bool $manageNodeAdminPath = true): array
     {
         $namespace = $this->assertValidLabel($namespace, 'namespace');
         $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
@@ -192,7 +219,7 @@ class KubernetesService implements KubernetesServiceInterface
         // Ingress this time (its backend service name is read back from it).
         $existingIngress = $this->findIngressByRequestId($namespace, $requestId);
         if ($existingIngress !== null) {
-            return $existingIngress;
+            return $existingIngress + ['node_admin_path' => null];
         }
 
         $deployment = $this->getDeployment($namespace, $deploymentName);
@@ -205,7 +232,7 @@ class KubernetesService implements KubernetesServiceInterface
             throw new KubernetesApiException("Deployment {$deploymentName} has no matchLabels selector to target");
         }
 
-        $nodeAdminPath = $this->syncNodeAdminPathEnv($namespace, $deploymentName, $deployment);
+        $nodeAdminPath = $manageNodeAdminPath ? $this->syncNodeAdminPathEnv($namespace, $deploymentName, $deployment) : null;
 
         $labels = $this->buildManagedLabels($deploymentName, $requestId);
 
@@ -354,8 +381,17 @@ class KubernetesService implements KubernetesServiceInterface
      * preview (built with no live Deployment lookup) can represent "not yet
      * resolved" as an explicit `null` rather than guessing at a value.
      */
-    private function buildServiceBody(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?array $selector, string $generateNamePrefix, string $serviceType): array
+    private function buildServiceBody(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?array $selector, string $generateNamePrefix, string $serviceType, ?int $nodePort = null): array
     {
+        $port = [
+            'port' => self::SERVICE_PORT,
+            'targetPort' => $targetPort,
+            'protocol' => 'TCP',
+        ];
+        if ($nodePort !== null) {
+            $port['nodePort'] = $nodePort;
+        }
+
         return [
             'apiVersion' => 'v1',
             'kind' => 'Service',
@@ -367,11 +403,7 @@ class KubernetesService implements KubernetesServiceInterface
             'spec' => [
                 'type' => $serviceType,
                 'selector' => $selector,
-                'ports' => [[
-                    'port' => self::SERVICE_PORT,
-                    'targetPort' => $targetPort,
-                    'protocol' => 'TCP',
-                ]],
+                'ports' => [$port],
             ],
         ];
     }

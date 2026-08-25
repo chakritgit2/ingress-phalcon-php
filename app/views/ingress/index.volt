@@ -27,7 +27,7 @@
         <circle cx="12" cy="12" r="9"/>
         <path stroke-linecap="round" d="M12 11v5m0-8h.01"/>
     </svg>
-    <span>บอททำงานอัตโนมัติทุก 1 นาที 2 อย่าง: <strong>ประมวลผลคำขอ</strong> (สร้าง/ลบ Ingress หรือ NodePort จริงบน Kubernetes ตามคิวที่ค้างอยู่) และ <strong>เก็บกวาดของหมดอายุ</strong> (ลบรายการที่ครบกำหนด "Schedule End" อัตโนมัติ) — ถ้าปิดบอทไว้ คำขอใหม่จะค้างที่สถานะ pending จนกว่าจะเปิดอีกครั้ง</span>
+    <span>บอททำงานอัตโนมัติทุก 1 นาที: <strong>ประมวลผลคำขอ</strong> (สร้าง/ลบ Ingress หรือ NodePort จริงบน Kubernetes ตามคิวที่ค้างอยู่), <strong>เก็บกวาดของหมดอายุ</strong> (ลบรายการที่ครบกำหนด "Schedule End" อัตโนมัติ) และ <strong>ปิด-เปิดตามเวลาทำการ</strong> (ปิดอัตโนมัติ 19:00 น. ทุกวัน เปิดอัตโนมัติ 08:30 น. จันทร์-ศุกร์ — เสาร์-อาทิตย์ต้องเปิดเองถ้าจำเป็น) — ถ้าปิดบอทไว้ คำขอใหม่จะค้างที่สถานะ pending จนกว่าจะเปิดอีกครั้ง</span>
 </p>
 {% if stuckCommandCount > 0 %}
 <div class="mb-4 flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-500/20 dark:bg-amber-500/10">
@@ -63,7 +63,7 @@
         <label class="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300" for="filter_status">สถานะ</label>
         <select class="h-9 rounded-lg border border-gray-300 px-3 py-1.5 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" id="filter_status" name="status">
             <option value="">ทั้งหมด</option>
-            {% for s in ['pending', 'active', 'deleting', 'expired', 'deleted', 'failed'] %}
+            {% for s in ['pending', 'active', 'closed', 'deleting', 'expired', 'deleted', 'failed'] %}
             <option value="{{ s }}" {{ filterStatus == s ? 'selected' : '' }}>{{ s }}</option>
             {% endfor %}
         </select>
@@ -179,6 +179,12 @@
                         </svg>
                         ต่ออายุ
                     </button>
+                    <button type="button" class="holdOpenBtn inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20" data-id="{{ row.id }}" data-developer-name="{{ row.developer_name|e }}" data-expires-at="{{ row.expires_at }}">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.36 6.36-.7-.7M6.34 6.34l-.7-.7m12.72 0-.7.7M6.34 17.66l-.7.7M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>
+                        </svg>
+                        เปิดค้างคืน
+                    </button>
                     <form class="inline" method="post" action="/ingress/{{ row.id }}/delete" onsubmit="return confirm('ยืนยันลบ?');">
                         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
                         <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20">
@@ -186,6 +192,17 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 .8 12.1a1 1 0 0 0 1 .9h6.4a1 1 0 0 0 1-.9L17 7"/>
                             </svg>
                             ลบ
+                        </button>
+                    </form>
+                    {% elseif row.status == 'closed' and currentUser.isDevops() %}
+                    <span class="mr-1 text-xs text-gray-400 dark:text-gray-500">ปิดตั้งแต่ {{ row.schedule_closed_at }} — เปิดอีกครั้ง 08:30 น.</span>
+                    <form class="inline" method="post" action="/ingress/{{ row.id }}/reopen-now" onsubmit="return confirm('เปิดใช้งานตอนนี้เลย?');">
+                        <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
+                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20">
+                            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7Z"/>
+                            </svg>
+                            เปิดใช้งานตอนนี้
                         </button>
                     </form>
                     {% elseif row.status == 'failed' and currentUser.isDevops() %}
@@ -223,7 +240,7 @@
    which the site's global CSS reset (margin: 0 on every element) breaks —
    without this, the dialog sticks to the top-left corner instead. Centering
    explicitly via top/left + transform sidesteps that dependency entirely. */
-#renewDialog[open] {
+#renewDialog[open], #holdOpenDialog[open] {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -236,16 +253,16 @@
 /* Progressive enhancement only — unsupported browsers (no @starting-style)
    just skip straight to the end state above with no animation, still fine. */
 @starting-style {
-    #renewDialog[open] {
+    #renewDialog[open], #holdOpenDialog[open] {
         opacity: 0;
         transform: translate(-50%, -50%) scale(0.96);
     }
 }
-#renewDialog {
+#renewDialog, #holdOpenDialog {
     opacity: 1;
     transition: opacity 0.15s ease-out, transform 0.15s ease-out, overlay 0.15s ease-out allow-discrete, display 0.15s ease-out allow-discrete;
 }
-#renewDialog::backdrop {
+#renewDialog::backdrop, #holdOpenDialog::backdrop {
     transition: background-color 0.15s ease-out;
 }
 </style>
@@ -306,6 +323,43 @@
                     <path stroke-linecap="round" d="M12 7v5l3 3"/>
                 </svg>
                 ต่ออายุ
+            </button>
+        </div>
+    </form>
+</dialog>
+
+<dialog id="holdOpenDialog" class="w-full max-w-sm overflow-hidden rounded-2xl border border-gray-200 bg-white p-0 shadow-2xl backdrop:bg-black/50 dark:border-gray-700 dark:bg-gray-900">
+    <form id="holdOpenForm" method="post">
+        <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
+        <input type="hidden" name="until" id="holdOpenUntilInput" value="">
+
+        <div class="flex items-start gap-3 border-b border-gray-100 px-5 py-4 dark:border-gray-800">
+            <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.36 6.36-.7-.7M6.34 6.34l-.7-.7m12.72 0-.7.7M6.34 17.66l-.7.7M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>
+                </svg>
+            </span>
+            <div class="min-w-0 flex-1 pt-0.5">
+                <h3 class="text-sm font-semibold text-gray-900 dark:text-white">เปิดค้างคืน</h3>
+                <p id="holdOpenDeveloperName" class="truncate text-xs text-gray-500 dark:text-gray-400"></p>
+            </div>
+            <button type="button" id="holdOpenCloseBtn" aria-label="ปิด" class="-m-1.5 shrink-0 rounded-lg p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 6l12 12M18 6 6 18"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="px-5 py-4">
+            <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">ปกติระบบจะปิดรายการนี้อัตโนมัติตอน 19:00 น. — เลือกเวลาที่ต้องการเปิดค้างไว้ถึง (ไม่เกิน 15 ชั่วโมงข้างหน้า และไม่เกินเวลาหมดอายุของรายการ)</p>
+            <input type="datetime-local" id="holdOpenDatetimeInput" aria-label="เปิดค้างคืนถึงเวลา" class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100">
+            <p id="holdOpenPreview" class="mt-3 hidden items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium"></p>
+        </div>
+
+        <div class="flex justify-end gap-2 border-t border-gray-100 bg-gray-50/60 px-5 py-3 dark:border-gray-800 dark:bg-gray-800/30">
+            <button type="button" id="holdOpenCancelBtn" class="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">ยกเลิก</button>
+            <button type="submit" id="holdOpenSubmitBtn" disabled class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none dark:disabled:bg-gray-700">
+                เปิดค้างคืน
             </button>
         </div>
     </form>
@@ -486,6 +540,122 @@ function initRenewTriggers() {
 }
 
 initRenewTriggers();
+
+// "เปิดค้างคืน" dialog — lets a developer keep tonight's 19:00 scheduled
+// close from touching an active row, up to MAX_HOLD_OPEN_HOURS ahead and
+// never past the row's own TTL (expires_at). Same
+// dialog/form-lives-outside-<tbody> structure as the renew dialog above.
+(function () {
+    var dialog = document.getElementById('holdOpenDialog');
+    var form = document.getElementById('holdOpenForm');
+    var untilInput = document.getElementById('holdOpenUntilInput');
+    var developerNameLabel = document.getElementById('holdOpenDeveloperName');
+    var datetimeInput = document.getElementById('holdOpenDatetimeInput');
+    var preview = document.getElementById('holdOpenPreview');
+    var submitBtn = document.getElementById('holdOpenSubmitBtn');
+    var cancelBtn = document.getElementById('holdOpenCancelBtn');
+    var closeBtn = document.getElementById('holdOpenCloseBtn');
+    var MAX_HOLD_OPEN_HOURS = 15;
+
+    function pad(n) {
+        return String(n).padStart(2, '0');
+    }
+
+    // Same reasoning as the renew dialog's toLocalInputValue(): build the
+    // datetime-local string by hand so it reflects the *local* wall clock,
+    // not toISOString()'s UTC shift.
+    function toLocalInputValue(date) {
+        return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+            + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+    }
+
+    function setPreview(text, state) {
+        if (!text) {
+            preview.classList.add('hidden');
+            preview.classList.remove('flex');
+            preview.textContent = '';
+            return;
+        }
+
+        preview.textContent = text;
+        preview.classList.remove('hidden');
+        preview.classList.add('flex');
+
+        var isError = state === 'error';
+        preview.classList.toggle('bg-red-50', isError);
+        preview.classList.toggle('text-red-600', isError);
+        preview.classList.toggle('dark:bg-red-500/10', isError);
+        preview.classList.toggle('dark:text-red-400', isError);
+        preview.classList.toggle('bg-amber-50', !isError);
+        preview.classList.toggle('text-amber-700', !isError);
+        preview.classList.toggle('dark:bg-amber-500/10', !isError);
+        preview.classList.toggle('dark:text-amber-400', !isError);
+    }
+
+    function onDatetimeChange() {
+        if (!datetimeInput.value) {
+            untilInput.value = '';
+            submitBtn.disabled = true;
+            setPreview('', null);
+            return;
+        }
+
+        var picked = new Date(datetimeInput.value);
+        var min = new Date(datetimeInput.min);
+        var max = new Date(datetimeInput.max);
+
+        if (isNaN(picked.getTime()) || picked <= min || picked > max) {
+            untilInput.value = '';
+            submitBtn.disabled = true;
+            setPreview('เลือกเวลาที่มากกว่าตอนนี้ และไม่เกิน ' + MAX_HOLD_OPEN_HOURS + ' ชม. / เวลาหมดอายุ', 'error');
+            return;
+        }
+
+        untilInput.value = datetimeInput.value.replace('T', ' ') + ':00';
+        submitBtn.disabled = false;
+        setPreview('เปิดค้างไว้ถึง ' + datetimeInput.value.replace('T', ' '), 'success');
+    }
+
+    datetimeInput.addEventListener('change', onDatetimeChange);
+    cancelBtn.addEventListener('click', function () {
+        dialog.close();
+    });
+    closeBtn.addEventListener('click', function () {
+        dialog.close();
+    });
+    dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) {
+            dialog.close();
+        }
+    });
+
+    window.openHoldOpenDialog = function (btn) {
+        var now = new Date();
+        var maxByWindow = new Date(now.getTime() + MAX_HOLD_OPEN_HOURS * 3600000);
+        var maxByExpiry = btn.dataset.expiresAt ? new Date(btn.dataset.expiresAt.replace(' ', 'T')) : null;
+        var max = maxByExpiry && maxByExpiry < maxByWindow ? maxByExpiry : maxByWindow;
+
+        form.action = '/ingress/' + btn.dataset.id + '/hold-open';
+        developerNameLabel.textContent = btn.dataset.developerName;
+        datetimeInput.min = toLocalInputValue(new Date(now.getTime() + 60000));
+        datetimeInput.max = toLocalInputValue(max);
+        datetimeInput.value = '';
+        untilInput.value = '';
+        submitBtn.disabled = true;
+        setPreview('', null);
+        dialog.showModal();
+    };
+})();
+
+function initHoldOpenTriggers() {
+    document.querySelectorAll('.holdOpenBtn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            window.openHoldOpenDialog(btn);
+        });
+    });
+}
+
+initHoldOpenTriggers();
 </script>
 {% endif %}
 
@@ -533,6 +703,9 @@ initRenewTriggers();
                 }
                 if (typeof initRenewTriggers === 'function') {
                     initRenewTriggers();
+                }
+                if (typeof initHoldOpenTriggers === 'function') {
+                    initHoldOpenTriggers();
                 }
             })
             .catch(function () {})
