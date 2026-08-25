@@ -31,9 +31,13 @@ spec:
           containers:
             - name: sweeper
               image: cr.advws.com/ingress-advws:e3a8a31
-              # ; not && — pruneExpired must still run even if processCommands
-              # fails outright, so expiry doesn't silently stop working too.
-              command: ["sh", "-c", "php app/console.php kubernetes processCommands; php app/console.php kubernetes pruneExpired"]
+              # ; not && — each step must still run even if an earlier one
+              # fails outright, so one broken step doesn't silently stop the
+              # rest. pruneExpired runs before scheduledClose/scheduledReopen
+              # so a row whose TTL just lapsed is already flipped to
+              # 'expired' before the nightly schedule looks at it in the
+              # same tick — the TTL always wins over the 19:00/08:30 cycle.
+              command: ["sh", "-c", "php app/console.php kubernetes processCommands; php app/console.php kubernetes pruneExpired; php app/console.php kubernetes scheduledClose; php app/console.php kubernetes scheduledReopen"]
               env:
                 - name: DB_HOST
                   value: mariadb.cdi-advws

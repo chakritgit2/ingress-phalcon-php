@@ -53,10 +53,19 @@ interface KubernetesServiceInterface
      * /nodeadmin (patched) — false/false if it isn't defined at all. A
      * failed patch attempt (e.g. missing RBAC) never fails this call: it's
      * reported as found=true, patched=false, error=<message> instead.
+     * node_admin_path is `null` (not attempted) when $manageNodeAdminPath is
+     * false — used by the nightly reopen sweep, which must never touch this
+     * env var (patching it triggers a Deployment rollout/pod restart).
      *
-     * @return array{service_name: string, node_port: int, k8s_uid: string, node_admin_path: array{found: bool, patched: bool, error?: string}}
+     * $preferredNodePort, if given, is requested explicitly instead of
+     * letting Kubernetes assign one — used by the nightly reopen sweep to
+     * try to keep the same NodePort number the developer was already given.
+     * Falls back to a fresh, Kubernetes-assigned port if the preferred one
+     * was claimed by something else in the meantime.
+     *
+     * @return array{service_name: string, node_port: int, k8s_uid: string, node_admin_path: ?array{found: bool, patched: bool, error?: string}}
      */
-    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId): array;
+    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true): array;
 
     public function deleteService(string $namespace, string $name): void;
 
@@ -78,12 +87,13 @@ interface KubernetesServiceInterface
      * createNodePortService) plus an Ingress routing $host through it with
      * TLS terminated using the given (pre-existing) Secret.
      *
-     * See createNodePortService() for what node_admin_path reports, and for
-     * why $targetPort no longer determines the Service/Ingress's real ports.
+     * See createNodePortService() for what node_admin_path reports (including
+     * the null-when-$manageNodeAdminPath-is-false case), and for why
+     * $targetPort no longer determines the Service/Ingress's real ports.
      *
-     * @return array{service_name: string, ingress_name: string, k8s_uid: string, node_admin_path: array{found: bool, patched: bool, error?: string}}
+     * @return array{service_name: string, ingress_name: string, k8s_uid: string, node_admin_path: ?array{found: bool, patched: bool, error?: string}}
      */
-    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId): array;
+    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId, bool $manageNodeAdminPath = true): array;
 
     public function deleteIngress(string $namespace, string $ingressName, string $serviceName): void;
 

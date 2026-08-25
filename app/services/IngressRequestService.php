@@ -294,6 +294,87 @@ class IngressRequestService
         ]);
     }
 
+    // 15h comfortably spans one full 19:00-08:30 closed window with margin.
+    private const MAX_HOLD_OPEN_MINUTES = 900;
+
+    /**
+     * Prevents tonight's 19:00 scheduled close from touching $row, until
+     * $untilDatetime — a plain DB update, nothing to change on the cluster
+     * since the row is already live. Self-expiring by design: once NOW()
+     * passes $untilDatetime, the very next KubernetesTask::scheduledCloseAction()
+     * tick closes the row as normal if it's still outside business hours —
+     * this is a one-night override, not a standing per-row opt-out.
+     */
+    public function holdOpen(IngressRequests $row, string $untilDatetime, Users $user): void
+    {
+        if ($row->status !== 'active') {
+            throw new \RuntimeException('เปิดค้างคืนได้เฉพาะรายการที่สถานะเป็น active');
+        }
+
+        $untilTs = strtotime($untilDatetime);
+        if ($untilTs === false || $untilTs <= time()) {
+            throw new \InvalidArgumentException('กรุณาเลือกเวลาที่มากกว่าเวลาปัจจุบัน');
+        }
+        if ($untilTs > time() + self::MAX_HOLD_OPEN_MINUTES * 60) {
+            throw new \InvalidArgumentException('เปิดค้างคืนได้ไม่เกิน ' . (self::MAX_HOLD_OPEN_MINUTES / 60) . ' ชั่วโมงล่วงหน้า');
+        }
+        if ($row->expires_at !== null && $untilTs > strtotime($row->expires_at)) {
+            throw new \InvalidArgumentException('เวลาที่เลือกเกินเวลาหมดอายุ (TTL) ของรายการนี้');
+        }
+
+        $row->schedule_hold_open_until = date('Y-m-d H:i:s', $untilTs);
+
+        if (!$row->save()) {
+            throw new \RuntimeException(implode(', ', array_map(
+                fn ($m) => $m->getMessage(),
+                $row->getMessages()
+            )));
+        }
+
+        $this->auditLogService->log('ingress_schedule_hold_open', AuditLogService::actorLabelFor($user), [
+            'ingress_request_id' => $row->id,
+            'actor_user_id' => $user->id,
+            'namespace' => $row->namespace,
+            'deployment_name' => $row->deployment_name,
+            'detail' => ['hold_open_until' => $row->schedule_hold_open_until],
+        ]);
+    }
+
+    /**
+     * Requests an out-of-schedule reopen (weekend, or a weekday before
+     * 08:30/after 19:00). Does NOT call Kubernetes directly — sets a flag
+     * that KubernetesTask::scheduledReopenAction() picks up on its next tick
+     * (same async latency as every other mutating action in this app), so
+     * the preferred-nodePort/no-env-patch reopen logic lives in exactly one
+     * place whether the reopen was automatic or manual.
+     */
+    public function requestManualReopen(IngressRequests $row, Users $user): void
+    {
+        if ($row->status !== 'closed') {
+            throw new \RuntimeException('เปิดใช้งานได้เฉพาะรายการที่ถูกปิดชั่วคราวตามตารางเวลาเท่านั้น');
+        }
+        if ($row->expires_at !== null && strtotime($row->expires_at) <= time()) {
+            throw new \RuntimeException('รายการนี้หมดอายุ (TTL) แล้ว ไม่สามารถเปิดใหม่ได้');
+        }
+
+        $row->schedule_reopen_requested_at = date('Y-m-d H:i:s');
+        $row->schedule_reopen_requested_by_user_id = $user->id;
+
+        if (!$row->save()) {
+            throw new \RuntimeException(implode(', ', array_map(
+                fn ($m) => $m->getMessage(),
+                $row->getMessages()
+            )));
+        }
+
+        $this->auditLogService->log('ingress_manual_reopen_requested', AuditLogService::actorLabelFor($user), [
+            'ingress_request_id' => $row->id,
+            'actor_user_id' => $user->id,
+            'namespace' => $row->namespace,
+            'deployment_name' => $row->deployment_name,
+        ]);
+    }
+
     public function deleteManually(IngressRequests $row, Users $user): void
     {
         $row->status = 'deleting';
