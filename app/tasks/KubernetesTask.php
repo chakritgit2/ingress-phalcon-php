@@ -4,6 +4,7 @@ namespace App\Tasks;
 
 use App\Models\IngressRequests;
 use App\Models\K8sCommands;
+use App\Models\Users;
 use App\Services\KubernetesApiException;
 use Phalcon\Cli\Task;
 
@@ -455,8 +456,13 @@ class KubernetesTask extends Task
                 // expires_at deliberately untouched — TTL keeps ticking.
                 $row->save();
 
+                // $requestedByUserId was captured before $row->save() cleared
+                // schedule_reopen_requested_by_user_id above — looking the
+                // user up fresh here (rather than via the $row->scheduleReopenRequestedBy
+                // lazy relation, which would now resolve against the
+                // already-nulled FK) is what actually finds them.
                 $actorLabel = $isManual
-                    ? ($row->scheduleReopenRequestedBy->email ?? 'system:unknown')
+                    ? (($requestedByUserId !== null ? Users::findFirst($requestedByUserId) : null)?->email ?? 'system:unknown')
                     : 'system:scheduler';
 
                 $this->syncLineLogin('activate', $row, $actorLabel, $isManual ? $requestedByUserId : null);
