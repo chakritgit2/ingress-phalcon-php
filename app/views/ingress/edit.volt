@@ -90,8 +90,10 @@
     </div>
 
     <div>
-        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="schedule_end_minutes">Schedule End (นาที) *</label>
-        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="number" id="schedule_end_minutes" name="schedule_end_minutes" value="{{ row.schedule_end_minutes }}" min="1" max="10080" required>
+        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="schedule_end_datetime">Schedule End (วันและเวลา) *</label>
+        <input class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="datetime-local" id="schedule_end_datetime" required>
+        <input type="hidden" id="schedule_end_minutes" name="schedule_end_minutes" value="{{ row.schedule_end_minutes }}">
+        <p id="schedule_end_preview" class="mt-1 text-xs text-gray-500 dark:text-gray-400"></p>
     </div>
 
     <div>
@@ -225,5 +227,75 @@ function generateUuidV4() {
 document.getElementById('genHostUuidBtn').addEventListener('click', function () {
     hostInput.value = 'nodered-' + generateUuidV4() + '.advws.org';
 });
+
+// schedule_end_minutes is a plain minutes count server-side (see
+// IngressRequestService::MAX_SCHEDULE_MINUTES) — this picks an absolute
+// date/time instead and converts it to minutes-from-now on submit, same
+// conversion the renew dialog on index.volt already does. The row's
+// existing schedule_end_minutes only ever meant "duration from whenever the
+// bot actually processes this" (see KubernetesTask::processCommandsAction()),
+// so pre-filling the picker as now + that duration is the right
+// equivalent starting point to edit from.
+(function () {
+    var datetimeInput = document.getElementById('schedule_end_datetime');
+    var minutesInput = document.getElementById('schedule_end_minutes');
+    var preview = document.getElementById('schedule_end_preview');
+    var form = datetimeInput.closest('form');
+    var maxMinutes = 10080;
+
+    function pad(n) {
+        return String(n).padStart(2, '0');
+    }
+
+    // datetime-local wants "YYYY-MM-DDTHH:mm" in the *local* timezone —
+    // toISOString() would shift it to UTC, so build the string by hand.
+    function toLocalInputValue(date) {
+        return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate())
+            + 'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+    }
+
+    datetimeInput.min = toLocalInputValue(new Date(Date.now() + 60000));
+    datetimeInput.max = toLocalInputValue(new Date(Date.now() + maxMinutes * 60000));
+
+    function syncMinutes() {
+        if (!datetimeInput.value) {
+            minutesInput.value = '';
+            preview.textContent = '';
+            return;
+        }
+
+        var diffMinutes = Math.round((new Date(datetimeInput.value).getTime() - Date.now()) / 60000);
+        if (diffMinutes < 1 || diffMinutes > maxMinutes) {
+            minutesInput.value = '';
+            preview.textContent = 'กรุณาเลือกเวลาในอนาคต ไม่เกิน 7 วันข้างหน้า';
+            return;
+        }
+
+        minutesInput.value = diffMinutes;
+        var days = Math.floor(diffMinutes / 1440);
+        var hours = Math.floor((diffMinutes % 1440) / 60);
+        var mins = diffMinutes % 60;
+        var parts = [];
+        if (days) parts.push(days + ' วัน');
+        if (hours) parts.push(hours + ' ชม.');
+        if (mins || parts.length === 0) parts.push(mins + ' นาที');
+        preview.textContent = 'ระยะเวลาที่ใช้งาน: ' + parts.join(' ');
+    }
+
+    var initialMinutes = parseInt(minutesInput.value, 10);
+    if (initialMinutes > 0) {
+        datetimeInput.value = toLocalInputValue(new Date(Date.now() + initialMinutes * 60000));
+        syncMinutes();
+    }
+
+    datetimeInput.addEventListener('change', syncMinutes);
+    form.addEventListener('submit', function (event) {
+        syncMinutes();
+        if (!minutesInput.value) {
+            event.preventDefault();
+            datetimeInput.reportValidity();
+        }
+    });
+})();
 </script>
 {% endblock %}
