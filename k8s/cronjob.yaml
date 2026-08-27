@@ -21,8 +21,11 @@ spec:
               # scheduledClose/scheduledReopen so a row whose TTL just
               # lapsed is already flipped to 'expired' before the nightly
               # schedule looks at it in the same tick — the TTL always wins
-              # over the 19:00/08:30 cycle.
-              command: ["sh", "-c", "php app/console.php kubernetes processCommands; php app/console.php kubernetes pruneExpired; php app/console.php kubernetes scheduledClose; php app/console.php kubernetes scheduledReopen"]
+              # over the 19:00/08:30 cycle. The statefulset steps are the
+              # same idea for the StatefulSet NodePort flow (see
+              # app/tasks/StatefulSetTask.php) — no nightly schedule there,
+              # just create/delete processing + hard-TTL expiry.
+              command: ["sh", "-c", "php app/console.php kubernetes processCommands; php app/console.php kubernetes pruneExpired; php app/console.php kubernetes scheduledClose; php app/console.php kubernetes scheduledReopen; php app/console.php stateful-set processCommands; php app/console.php stateful-set pruneExpired"]
               env:
                 - name: SERVER_CONFIG
                   value: /etc/ingress-selfservice/kubeconfig

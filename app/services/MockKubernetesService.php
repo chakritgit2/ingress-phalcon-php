@@ -39,6 +39,19 @@ class MockKubernetesService implements KubernetesServiceInterface
         'production' => ['wildcard-advws-tls', 'kapooktopup-tls'],
     ];
 
+    private const STATEFULSETS = [
+        'qa' => [
+            ['name' => 'redis-cache', 'replicas' => 1],
+        ],
+        'staging' => [
+            ['name' => 'postgres-db', 'replicas' => 1],
+        ],
+        'production' => [
+            ['name' => 'redis-cache', 'replicas' => 3],
+            ['name' => 'postgres-db', 'replicas' => 2],
+        ],
+    ];
+
     // Mirrors KubernetesService::SERVICE_PORT/resolveTargetPort() — see
     // that class for why these are fixed rather than taken from the
     // ingress request's own target_port.
@@ -99,6 +112,76 @@ class MockKubernetesService implements KubernetesServiceInterface
     public function listSecrets(string $namespace): array
     {
         return self::SECRETS[$namespace] ?? [];
+    }
+
+    public function listStatefulSets(string $namespace): array
+    {
+        return array_map(
+            fn (array $s) => $this->withContainerNames($s, $namespace),
+            self::STATEFULSETS[$namespace] ?? []
+        );
+    }
+
+    public function listAllStatefulSets(): array
+    {
+        $all = [];
+        foreach (self::STATEFULSETS as $namespace => $statefulSets) {
+            foreach ($statefulSets as $s) {
+                $all[] = $this->withContainerNames($s, $namespace);
+            }
+        }
+        return $all;
+    }
+
+    public function createNodePortServiceForStatefulSet(string $namespace, string $statefulSetName, int $targetPort, int $requestId, ?int $preferredNodePort = null): array
+    {
+        $exists = array_filter(
+            self::STATEFULSETS[$namespace] ?? [],
+            fn (array $s) => $s['name'] === $statefulSetName
+        );
+        if (empty($exists)) {
+            throw new KubernetesApiException("StatefulSet {$statefulSetName} not found in namespace {$namespace}");
+        }
+
+        $suffix = substr(bin2hex(random_bytes(4)), 0, 6);
+        $resolvedTargetPort = $this->resolveTargetPort(array_shift($exists));
+
+        // NOTE: unlike the real KubernetesService, this can't actually
+        // detect a duplicate across separate CLI invocations (no persistent
+        // state) — $requestId is only threaded through for interface
+        // parity and to show up in the logged payload.
+        $this->requestLog[] = [
+            'method' => 'POST',
+            'path' => "/api/v1/namespaces/{$namespace}/services",
+            'body' => [
+                'apiVersion' => 'v1',
+                'kind' => 'Service',
+                'metadata' => [
+                    'generateName' => 'tmp-sts-nodeport-',
+                    'namespace' => $namespace,
+                    'labels' => [
+                        'app.kubernetes.io/managed-by' => 'ingress-selfservice',
+                        'advws-group' => 'company',
+                        'k8s-app' => $statefulSetName,
+                        'ingress-selfservice.advws.com/statefulset-request-id' => (string) $requestId,
+                    ],
+                ],
+                'spec' => ['type' => 'NodePort', 'ports' => [['port' => self::SERVICE_PORT, 'targetPort' => $resolvedTargetPort]]],
+            ],
+        ];
+
+        return [
+            'service_name' => "tmp-sts-nodeport-{$suffix}",
+            'node_port' => $preferredNodePort ?? random_int(30000, 32767),
+            'k8s_uid' => sprintf(
+                '%08x-%04x-%04x-%04x-%012x',
+                random_int(0, 0xffffffff),
+                random_int(0, 0xffff),
+                random_int(0, 0xffff),
+                random_int(0, 0xffff),
+                random_int(0, 0xffffffffffff)
+            ),
+        ];
     }
 
     public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true): array
@@ -357,6 +440,29 @@ class MockKubernetesService implements KubernetesServiceInterface
                         'advws-group' => 'company',
                         'k8s-app' => $deploymentName,
                         'ingress-selfservice.advws.com/request-id' => (string) $requestId,
+                    ],
+                ],
+                'spec' => ['type' => 'NodePort', 'selector' => null, 'ports' => [['port' => self::SERVICE_PORT, 'targetPort' => self::DEFAULT_TARGET_PORT]]],
+            ],
+        ]];
+    }
+
+    public function previewCreateNodePortServiceForStatefulSetPayload(string $namespace, string $statefulSetName, int $targetPort, int $requestId): array
+    {
+        return [[
+            'method' => 'POST',
+            'path' => "/api/v1/namespaces/{$namespace}/services",
+            'body' => [
+                'apiVersion' => 'v1',
+                'kind' => 'Service',
+                'metadata' => [
+                    'generateName' => 'tmp-sts-nodeport-',
+                    'namespace' => $namespace,
+                    'labels' => [
+                        'app.kubernetes.io/managed-by' => 'ingress-selfservice',
+                        'advws-group' => 'company',
+                        'k8s-app' => $statefulSetName,
+                        'ingress-selfservice.advws.com/statefulset-request-id' => (string) $requestId,
                     ],
                 ],
                 'spec' => ['type' => 'NodePort', 'selector' => null, 'ports' => [['port' => self::SERVICE_PORT, 'targetPort' => self::DEFAULT_TARGET_PORT]]],

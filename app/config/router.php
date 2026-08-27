@@ -31,6 +31,20 @@ $router->add('/ingress/export-groups', ['controller' => 'ingress', 'action' => '
 $router->add('/ingress/bulk-delete', ['controller' => 'ingress', 'action' => 'bulkDelete'])->via(['POST']);
 $router->add('/ingress/bulk-retry', ['controller' => 'ingress', 'action' => 'bulkRetry'])->via(['POST']);
 
+$router->add('/statefulsets', ['controller' => 'stateful-set', 'action' => 'index'])->via(['GET']);
+$router->add('/statefulsets/create', ['controller' => 'stateful-set', 'action' => 'create'])->via(['GET']);
+$router->add('/statefulsets/api/statefulsets', ['controller' => 'stateful-set', 'action' => 'statefulsetsApi'])->via(['GET']);
+$router->add('/statefulsets/store', ['controller' => 'stateful-set', 'action' => 'store'])->via(['POST']);
+$router->add('/statefulsets/{id:[0-9]+}/edit', ['controller' => 'stateful-set', 'action' => 'edit'])->via(['GET']);
+$router->add('/statefulsets/{id:[0-9]+}/update', ['controller' => 'stateful-set', 'action' => 'update'])->via(['POST']);
+$router->add('/statefulsets/{id:[0-9]+}/delete', ['controller' => 'stateful-set', 'action' => 'delete'])->via(['POST']);
+$router->add('/statefulsets/{id:[0-9]+}/retry', ['controller' => 'stateful-set', 'action' => 'retry'])->via(['POST']);
+$router->add('/statefulsets/{id:[0-9]+}/renew', ['controller' => 'stateful-set', 'action' => 'renew'])->via(['POST']);
+$router->add('/statefulsets/toggle-bot', ['controller' => 'stateful-set', 'action' => 'toggleBot'])->via(['POST']);
+$router->add('/statefulsets/export', ['controller' => 'stateful-set', 'action' => 'export'])->via(['GET']);
+$router->add('/statefulsets/bulk-delete', ['controller' => 'stateful-set', 'action' => 'bulkDelete'])->via(['POST']);
+$router->add('/statefulsets/bulk-retry', ['controller' => 'stateful-set', 'action' => 'bulkRetry'])->via(['POST']);
+
 $router->add('/users', ['controller' => 'users', 'action' => 'index'])->via(['GET']);
 $router->add('/users/{id:[0-9]+}/edit', ['controller' => 'users', 'action' => 'edit'])->via(['GET']);
 $router->add('/users/{id:[0-9]+}/email', ['controller' => 'users', 'action' => 'updateEmail'])->via(['POST']);

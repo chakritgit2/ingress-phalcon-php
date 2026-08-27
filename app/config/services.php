@@ -11,6 +11,7 @@ use App\Services\KubernetesService;
 use App\Services\LineLoginService;
 use App\Services\MockKubernetesService;
 use App\Services\SettingsService;
+use App\Services\StatefulSetRequestService;
 use App\Services\UsersService;
 use MongoDB\Client as MongoClient;
 use Phalcon\Cache\Cache;
@@ -214,6 +215,10 @@ $di->setShared('settingsService', function () {
 
 $di->setShared('ingressRequestService', function () use ($config) {
     return new IngressRequestService($config->kubernetes->node_ip, $this->get('auditLogService'), $this->get('kubernetesService'));
+});
+
+$di->setShared('statefulSetRequestService', function () use ($config) {
+    return new StatefulSetRequestService($config->kubernetes->node_ip, $this->get('auditLogService'), $this->get('kubernetesService'));
 });
 
 $di->setShared('usersService', function () {

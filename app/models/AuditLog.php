@@ -8,11 +8,13 @@ class AuditLog extends Model
 {
     public ?int $id = null;
     public ?int $ingress_request_id = null;
+    public ?int $statefulset_request_id = null;
     public string $event_type;
     public ?int $actor_user_id = null;
     public string $actor_label;
     public ?string $namespace = null;
     public ?string $deployment_name = null;
+    public ?string $statefulset_name = null;
     public ?int $node_port = null;
     public ?string $node_ip = null;
     public ?string $detail = null;
@@ -22,6 +24,7 @@ class AuditLog extends Model
     {
         $this->setSource('audit_log');
         $this->belongsTo('ingress_request_id', IngressRequests::class, 'id', ['alias' => 'ingressRequest']);
+        $this->belongsTo('statefulset_request_id', StatefulSetRequests::class, 'id', ['alias' => 'statefulSetRequest']);
         $this->belongsTo('actor_user_id', Users::class, 'id', ['alias' => 'actor']);
     }
 
