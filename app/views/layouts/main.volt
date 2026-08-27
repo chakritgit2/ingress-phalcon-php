@@ -302,6 +302,72 @@
             });
     }
 
+    // Same shape as populateDeploymentSelect(), for the StatefulSet picker.
+    function populateStatefulSetSelect(stsSelect, statefulSets, preselectName, preselectNamespace, showNamespace) {
+        stsSelect.innerHTML = '';
+        if (!statefulSets || statefulSets.length === 0) {
+            stsSelect.innerHTML = '<option value="">-- ไม่พบ StatefulSet --</option>';
+            stsSelect.disabled = false;
+            return;
+        }
+        var placeholder = document.createElement('option');
+        placeholder.value = '';
+        placeholder.textContent = '-- เลือก StatefulSet --';
+        stsSelect.appendChild(placeholder);
+        statefulSets.forEach(function (s) {
+            var opt = document.createElement('option');
+            opt.value = s.name;
+            opt.dataset.namespace = s.namespace || '';
+            opt.dataset.nodered = (s.container_names || []).indexOf('nodered') !== -1 ? '1' : '';
+            opt.textContent = showNamespace
+                ? s.name + ' — ns: ' + s.namespace + ' (replicas: ' + s.replicas + ')'
+                : s.name + ' (replicas: ' + s.replicas + ')';
+            if (preselectName && s.name === preselectName && (!preselectNamespace || s.namespace === preselectNamespace)) {
+                opt.selected = true;
+            }
+            stsSelect.appendChild(opt);
+        });
+        stsSelect.disabled = false;
+    }
+
+    function loadStatefulSetsForNamespace(stsSelect, spinner, namespace, preselectName, silent) {
+        if (!silent) {
+            stsSelect.disabled = true;
+            stsSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+        }
+        if (spinner) spinner.classList.remove('hidden');
+
+        return fetchJson('/statefulsets/api/statefulsets?namespace=' + encodeURIComponent(namespace))
+            .then(function (data) {
+                populateStatefulSetSelect(stsSelect, data.statefulsets, preselectName, namespace, false);
+            })
+            .catch(function () {
+                if (!silent) stsSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
+            })
+            .finally(function () {
+                if (spinner) spinner.classList.add('hidden');
+            });
+    }
+
+    function loadAllStatefulSets(stsSelect, spinner, preselectName, preselectNamespace, silent) {
+        if (!silent) {
+            stsSelect.disabled = true;
+            stsSelect.innerHTML = '<option value="">กำลังโหลด...</option>';
+        }
+        if (spinner) spinner.classList.remove('hidden');
+
+        return fetchJson('/statefulsets/api/statefulsets')
+            .then(function (data) {
+                populateStatefulSetSelect(stsSelect, data.statefulsets, preselectName, preselectNamespace, true);
+            })
+            .catch(function () {
+                if (!silent) stsSelect.innerHTML = '<option value="">โหลดไม่สำเร็จ</option>';
+            })
+            .finally(function () {
+                if (spinner) spinner.classList.add('hidden');
+            });
+    }
+
     function loadSecretsForNamespace(secretSelect, namespace, preselectName, silent) {
         var FALLBACK_SECRETS = ['advws-tls'];
         if (!silent) {
@@ -334,6 +400,13 @@
                     <path d="M7.2 11 16.8 6.8M7.2 13 16.8 17.2"/>
                 </svg>
                 Ingress
+            </a>
+            <a class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition {{ dispatcher.getControllerName() == 'stateful-set' ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/10 hover:text-white' }}" href="/statefulsets">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                    <ellipse cx="12" cy="5" rx="7" ry="2.5"/>
+                    <path d="M5 5v14c0 1.38 3.13 2.5 7 2.5s7-1.12 7-2.5V5M5 12c0 1.38 3.13 2.5 7 2.5s7-1.12 7-2.5"/>
+                </svg>
+                StatefulSets
             </a>
             <a class="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-2 text-sm font-medium transition {{ dispatcher.getControllerName() == 'audit' ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/10 hover:text-white' }}" href="/audit">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75" aria-hidden="true">

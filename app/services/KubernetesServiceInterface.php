@@ -30,6 +30,17 @@ interface KubernetesServiceInterface
     public function listAllDeployments(): array;
 
     /**
+     * Same shape as listDeployments(), but for StatefulSets.
+     */
+    public function listStatefulSets(string $namespace): array;
+
+    /**
+     * Same shape as listAllDeployments(), but for StatefulSets across every
+     * namespace at once.
+     */
+    public function listAllStatefulSets(): array;
+
+    /**
      * TLS-typed Secret names available in the namespace, for populating the
      * secretName choices on the Ingress+TLS create form.
      *
@@ -66,6 +77,20 @@ interface KubernetesServiceInterface
      * @return array{service_name: string, node_port: int, k8s_uid: string, node_admin_path: ?array{found: bool, patched: bool, error?: string}}
      */
     public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true): array;
+
+    /**
+     * Same idea as createNodePortService(), but targets a StatefulSet
+     * instead of a Deployment — no NODE_ADMIN_PATH sync (that's a
+     * Node-RED/Deployment-specific convention that doesn't apply here).
+     * $requestId is the owning statefulset_requests.id, and implementations
+     * must key idempotency/labels off a label distinct from
+     * createNodePortService()'s (see KubernetesService) — the two id
+     * sequences are independent, so reusing the same label key risks
+     * matching the wrong Service across the two flows.
+     *
+     * @return array{service_name: string, node_port: int, k8s_uid: string}
+     */
+    public function createNodePortServiceForStatefulSet(string $namespace, string $statefulSetName, int $targetPort, int $requestId, ?int $preferredNodePort = null): array;
 
     public function deleteService(string $namespace, string $name): void;
 
@@ -127,6 +152,12 @@ interface KubernetesServiceInterface
      * fully-resolved request.
      */
     public function previewCreateNodePortServicePayload(string $namespace, string $deploymentName, int $targetPort, int $requestId): array;
+
+    /**
+     * Same idea as previewCreateNodePortServicePayload(), but for
+     * createNodePortServiceForStatefulSet().
+     */
+    public function previewCreateNodePortServiceForStatefulSetPayload(string $namespace, string $statefulSetName, int $targetPort, int $requestId): array;
 
     /**
      * Same idea as previewCreateNodePortServicePayload(), but for the

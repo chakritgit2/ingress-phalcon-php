@@ -12,8 +12,8 @@ class AuditLogService
      *
      * @param string $eventType one of AuditLog's event_type enum values
      * @param string $actorLabel human-readable actor, e.g. "pannawat@advws.com" or "system:sweeper"
-     * @param array $context optional: ingress_request_id, actor_user_id, namespace,
-     *                        deployment_name, node_port, node_ip, detail (array)
+     * @param array $context optional: ingress_request_id, statefulset_request_id, actor_user_id,
+     *                        namespace, deployment_name, statefulset_name, node_port, node_ip, detail (array)
      */
     public function log(string $eventType, string $actorLabel, array $context = []): AuditLog
     {
@@ -21,9 +21,11 @@ class AuditLogService
         $entry->event_type = $eventType;
         $entry->actor_label = $actorLabel;
         $entry->ingress_request_id = $context['ingress_request_id'] ?? null;
+        $entry->statefulset_request_id = $context['statefulset_request_id'] ?? null;
         $entry->actor_user_id = $context['actor_user_id'] ?? null;
         $entry->namespace = $context['namespace'] ?? null;
         $entry->deployment_name = $context['deployment_name'] ?? null;
+        $entry->statefulset_name = $context['statefulset_name'] ?? null;
         $entry->node_port = $context['node_port'] ?? null;
         $entry->node_ip = $context['node_ip'] ?? null;
         $entry->detail = isset($context['detail']) ? json_encode($context['detail']) : null;

@@ -11,6 +11,13 @@ class KubernetesService implements KubernetesServiceInterface
     // single label (no dots).
     private const DNS_1123_SUBDOMAIN = '/^[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$/';
     private const REQUEST_ID_LABEL = 'ingress-selfservice.advws.com/request-id';
+    // Distinct from REQUEST_ID_LABEL: statefulset_requests.id and
+    // ingress_requests.id are independent auto-increment sequences, so a
+    // shared label key could match the wrong Service across the two flows
+    // (e.g. ingress request #5 and statefulset request #5 in the same
+    // namespace) when findServiceByRequestId()/findServiceByStatefulSetRequestId()
+    // look one up by id alone.
+    private const STATEFULSET_REQUEST_ID_LABEL = 'ingress-selfservice.advws.com/statefulset-request-id';
     private const NODE_ADMIN_PATH_ENV_NAME = 'NODE_ADMIN_PATH';
     private const NODE_ADMIN_PATH_VALUE = '/nodeadmin';
     private const NODE_ADMIN_PATH_ORIGINAL_VALUE = '/hello-world';
@@ -117,6 +124,49 @@ class KubernetesService implements KubernetesServiceInterface
         }
     }
 
+    public function listStatefulSets(string $namespace): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $result = $this->client->get("/apis/apps/v1/namespaces/{$namespace}/statefulsets");
+
+        return array_map(
+            fn (array $item) => [
+                'name' => $item['metadata']['name'],
+                'namespace' => $namespace,
+                'replicas' => $item['spec']['replicas'] ?? 0,
+                'container_names' => $this->extractContainerNames($item),
+            ],
+            $result['items'] ?? []
+        );
+    }
+
+    public function listAllStatefulSets(): array
+    {
+        $result = $this->client->get('/apis/apps/v1/statefulsets');
+
+        return array_map(
+            fn (array $item) => [
+                'name' => $item['metadata']['name'],
+                'namespace' => $item['metadata']['namespace'],
+                'replicas' => $item['spec']['replicas'] ?? 0,
+                'container_names' => $this->extractContainerNames($item),
+            ],
+            $result['items'] ?? []
+        );
+    }
+
+    public function getStatefulSet(string $namespace, string $name): ?array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $name = $this->assertValidLabel($name, 'statefulset name');
+
+        try {
+            return $this->client->get("/apis/apps/v1/namespaces/{$namespace}/statefulsets/{$name}");
+        } catch (KubernetesApiException $e) {
+            return null;
+        }
+    }
+
     /**
      * @return string[]
      */
@@ -202,6 +252,48 @@ class KubernetesService implements KubernetesServiceInterface
             unset($body['spec']['ports'][0]['nodePort']);
             return $this->client->post("/api/v1/namespaces/{$namespace}/services", $body);
         }
+    }
+
+    /**
+     * @return array{service_name: string, node_port: int, k8s_uid: string}
+     */
+    public function createNodePortServiceForStatefulSet(string $namespace, string $statefulSetName, int $targetPort, int $requestId, ?int $preferredNodePort = null): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $statefulSetName = $this->assertValidLabel($statefulSetName, 'statefulset name');
+        $targetPort = $this->assertValidPort($targetPort);
+        if ($preferredNodePort !== null) {
+            $preferredNodePort = $this->assertValidPort($preferredNodePort);
+        }
+
+        $existing = $this->findServiceByStatefulSetRequestId($namespace, $requestId);
+        if ($existing !== null) {
+            return $existing;
+        }
+
+        $statefulSet = $this->getStatefulSet($namespace, $statefulSetName);
+        if ($statefulSet === null) {
+            throw new KubernetesApiException("StatefulSet {$statefulSetName} not found in namespace {$namespace}");
+        }
+
+        $selector = $statefulSet['spec']['selector']['matchLabels'] ?? [];
+        if (empty($selector)) {
+            throw new KubernetesApiException("StatefulSet {$statefulSetName} has no matchLabels selector to target");
+        }
+
+        $resolvedTargetPort = $this->resolveTargetPort($statefulSet);
+
+        $body = $this->buildServiceBody($namespace, $statefulSetName, $resolvedTargetPort, $requestId, $selector, 'tmp-sts-nodeport-', 'NodePort', $preferredNodePort, self::STATEFULSET_REQUEST_ID_LABEL);
+
+        $created = $preferredNodePort !== null
+            ? $this->postServiceWithPortFallback($namespace, $body, $preferredNodePort)
+            : $this->client->post("/api/v1/namespaces/{$namespace}/services", $body);
+
+        return [
+            'service_name' => $created['metadata']['name'],
+            'node_port' => $created['spec']['ports'][0]['nodePort'],
+            'k8s_uid' => $created['metadata']['uid'],
+        ];
     }
 
     /**
@@ -365,23 +457,26 @@ class KubernetesService implements KubernetesServiceInterface
         return ['found' => true, 'patched' => true];
     }
 
-    private function buildManagedLabels(string $deploymentName, int $requestId): array
+    private function buildManagedLabels(string $workloadName, int $requestId, string $requestIdLabel = self::REQUEST_ID_LABEL): array
     {
         return [
             'app.kubernetes.io/managed-by' => 'ingress-selfservice',
             'advws-group' => 'company',
-            'k8s-app' => $deploymentName,
-            self::REQUEST_ID_LABEL => (string) $requestId,
+            'k8s-app' => $workloadName,
+            $requestIdLabel => (string) $requestId,
         ];
     }
 
     /**
-     * Shared by createNodePortService(), createIngress()'s backing Service,
-     * and the preview*Payload() methods below. $selector is nullable so a
-     * preview (built with no live Deployment lookup) can represent "not yet
-     * resolved" as an explicit `null` rather than guessing at a value.
+     * Shared by createNodePortService(), createNodePortServiceForStatefulSet(),
+     * createIngress()'s backing Service, and the preview*Payload() methods
+     * below. $selector is nullable so a preview (built with no live
+     * Deployment/StatefulSet lookup) can represent "not yet resolved" as an
+     * explicit `null` rather than guessing at a value. $requestIdLabel lets
+     * createNodePortServiceForStatefulSet() key its idempotency label
+     * separately from the Deployment flow's (see STATEFULSET_REQUEST_ID_LABEL).
      */
-    private function buildServiceBody(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?array $selector, string $generateNamePrefix, string $serviceType, ?int $nodePort = null): array
+    private function buildServiceBody(string $namespace, string $workloadName, int $targetPort, int $requestId, ?array $selector, string $generateNamePrefix, string $serviceType, ?int $nodePort = null, string $requestIdLabel = self::REQUEST_ID_LABEL): array
     {
         $port = [
             'port' => self::SERVICE_PORT,
@@ -398,7 +493,7 @@ class KubernetesService implements KubernetesServiceInterface
             'metadata' => [
                 'generateName' => $generateNamePrefix,
                 'namespace' => $namespace,
-                'labels' => $this->buildManagedLabels($deploymentName, $requestId),
+                'labels' => $this->buildManagedLabels($workloadName, $requestId, $requestIdLabel),
             ],
             'spec' => [
                 'type' => $serviceType,
@@ -468,6 +563,20 @@ class KubernetesService implements KubernetesServiceInterface
             'method' => 'POST',
             'path' => "/api/v1/namespaces/{$namespace}/services",
             'body' => $this->buildServiceBody($namespace, $deploymentName, self::DEFAULT_TARGET_PORT, $requestId, null, 'tmp-nodeport-', 'NodePort'),
+        ]];
+    }
+
+    public function previewCreateNodePortServiceForStatefulSetPayload(string $namespace, string $statefulSetName, int $targetPort, int $requestId): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $statefulSetName = $this->assertValidLabel($statefulSetName, 'statefulset name');
+        $targetPort = $this->assertValidPort($targetPort);
+
+        // Same no-live-lookup caveat as previewCreateNodePortServicePayload().
+        return [[
+            'method' => 'POST',
+            'path' => "/api/v1/namespaces/{$namespace}/services",
+            'body' => $this->buildServiceBody($namespace, $statefulSetName, self::DEFAULT_TARGET_PORT, $requestId, null, 'tmp-sts-nodeport-', 'NodePort', null, self::STATEFULSET_REQUEST_ID_LABEL),
         ]];
     }
 
@@ -556,6 +665,31 @@ class KubernetesService implements KubernetesServiceInterface
         return [
             'service_name' => $service['metadata']['name'],
             'node_port' => $service['spec']['ports'][0]['nodePort'] ?? null,
+            'k8s_uid' => $service['metadata']['uid'],
+        ];
+    }
+
+    /**
+     * Same idea as findServiceByRequestId(), but keyed off
+     * STATEFULSET_REQUEST_ID_LABEL — see createNodePortServiceForStatefulSet().
+     *
+     * @return array{service_name: string, node_port: int, k8s_uid: string}|null
+     */
+    private function findServiceByStatefulSetRequestId(string $namespace, int $requestId): ?array
+    {
+        $query = http_build_query(['labelSelector' => self::STATEFULSET_REQUEST_ID_LABEL . '=' . $requestId]);
+        $result = $this->client->get("/api/v1/namespaces/{$namespace}/services?{$query}");
+        $items = $result['items'] ?? [];
+
+        if (empty($items)) {
+            return null;
+        }
+
+        $service = $items[0];
+
+        return [
+            'service_name' => $service['metadata']['name'],
+            'node_port' => $service['spec']['ports'][0]['nodePort'] ?? 0,
             'k8s_uid' => $service['metadata']['uid'],
         ];
     }
