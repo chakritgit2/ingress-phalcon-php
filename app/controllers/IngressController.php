@@ -224,10 +224,37 @@ class IngressController extends ControllerBase
         return $this->response->redirect('/ingress');
     }
 
-    public function createAction(): void
+    public function createAction()
     {
-        $this->view->setVar('namespaces', $this->kubernetesService->listNamespaces());
+        try {
+            $namespaces = $this->kubernetesService->listNamespaces();
+        } catch (\Throwable $e) {
+            $this->flash->error('ดึงข้อมูล namespace จาก Kubernetes ไม่สำเร็จ: ' . $e->getMessage());
+            return $this->response->redirect('/ingress');
+        }
+
+        $this->view->setVar('namespaces', $namespaces);
         $this->view->setVar('developerNameDefault', $this->currentUser()->name);
+    }
+
+    public function cloneAction($id)
+    {
+        $row = IngressRequests::findFirst((int) $id);
+
+        if ($row === null || $row->status !== 'expired') {
+            $this->flash->error('ไม่พบรายการ หรือรายการนี้ไม่ใช่รายการที่หมดอายุ');
+            return $this->response->redirect('/ingress');
+        }
+
+        try {
+            $namespaces = $this->kubernetesService->listNamespaces();
+        } catch (\Throwable $e) {
+            $this->flash->error('ดึงข้อมูล namespace จาก Kubernetes ไม่สำเร็จ: ' . $e->getMessage());
+            return $this->response->redirect('/ingress');
+        }
+
+        $this->view->setVar('row', $row);
+        $this->view->setVar('namespaces', $namespaces);
     }
 
     public function deploymentsApiAction()
@@ -301,8 +328,16 @@ class IngressController extends ControllerBase
             return;
         }
 
+        try {
+            $namespaces = $this->kubernetesService->listNamespaces();
+        } catch (\Throwable $e) {
+            $this->flash->error('ดึงข้อมูล namespace จาก Kubernetes ไม่สำเร็จ: ' . $e->getMessage());
+            $this->response->redirect('/ingress');
+            return;
+        }
+
         $this->view->setVar('row', $row);
-        $this->view->setVar('namespaces', $this->kubernetesService->listNamespaces());
+        $this->view->setVar('namespaces', $namespaces);
     }
 
     public function updateAction($id)

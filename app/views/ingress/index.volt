@@ -163,8 +163,9 @@
                 </td>
                 <td class="px-4 py-3">{% include "partials/badge" with ["status": row.status] %}</td>
                 <td class="px-4 py-3">
+                    <div class="flex flex-wrap items-center gap-1.5">
                     {% if editableIds[row.id] is defined and currentUser.isDevops() %}
-                    <a href="/ingress/{{ row.id }}/edit" class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+                    <a href="/ingress/{{ row.id }}/edit" class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
                         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m16.5 4.5 3 3L7 20H4v-3L16.5 4.5Z"/>
                         </svg>
@@ -172,14 +173,14 @@
                     </a>
                     {% endif %}
                     {% if row.status == 'active' and currentUser.isDevops() %}
-                    <button type="button" class="renewBtn inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20" data-id="{{ row.id }}" data-expires-at="{{ row.expires_at }}" data-developer-name="{{ row.developer_name|e }}">
+                    <button type="button" class="renewBtn inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20" data-id="{{ row.id }}" data-expires-at="{{ row.expires_at }}" data-developer-name="{{ row.developer_name|e }}">
                         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <circle cx="12" cy="12" r="9"/>
                             <path stroke-linecap="round" d="M12 7v5l3 3"/>
                         </svg>
                         ต่ออายุ
                     </button>
-                    <button type="button" class="holdOpenBtn inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20" data-id="{{ row.id }}" data-developer-name="{{ row.developer_name|e }}" data-expires-at="{{ row.expires_at }}">
+                    <button type="button" class="holdOpenBtn inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-400 dark:hover:bg-amber-500/20" data-id="{{ row.id }}" data-developer-name="{{ row.developer_name|e }}" data-expires-at="{{ row.expires_at }}">
                         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.36 6.36-.7-.7M6.34 6.34l-.7-.7m12.72 0-.7.7M6.34 17.66l-.7.7M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z"/>
                         </svg>
@@ -187,7 +188,7 @@
                     </button>
                     <form class="inline" method="post" action="/ingress/{{ row.id }}/delete" onsubmit="return confirm('ยืนยันลบ?');">
                         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
-                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20">
+                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20">
                             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 .8 12.1a1 1 0 0 0 1 .9h6.4a1 1 0 0 0 1-.9L17 7"/>
                             </svg>
@@ -198,7 +199,7 @@
                     <span class="mr-1 text-xs text-gray-400 dark:text-gray-500">ปิดตั้งแต่ {{ row.schedule_closed_at }} — เปิดอีกครั้ง 08:30 น.</span>
                     <form class="inline" method="post" action="/ingress/{{ row.id }}/reopen-now" onsubmit="return confirm('เปิดใช้งานตอนนี้เลย?');">
                         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
-                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20">
+                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20">
                             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7Z"/>
                             </svg>
@@ -208,14 +209,23 @@
                     {% elseif row.status == 'failed' and currentUser.isDevops() %}
                     <form class="inline" method="post" action="/ingress/{{ row.id }}/retry" onsubmit="return confirm('ลองใหม่อีกครั้ง?');">
                         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
-                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20">
+                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20">
                             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0 1 14.5-4.5M20 15a8 8 0 0 1-14.5 4.5"/>
                             </svg>
                             ลองใหม่
                         </button>
                     </form>
+                    {% elseif row.status == 'expired' and currentUser.isDevops() %}
+                    <a href="/ingress/{{ row.id }}/clone" class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20">
+                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <rect x="9" y="9" width="11" height="11" rx="2"/>
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 15H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v1"/>
+                        </svg>
+                        โคลน
+                    </a>
                     {% endif %}
+                    </div>
                 </td>
             </tr>
             {% else %}
@@ -239,14 +249,27 @@
 /* The browser's default dialog:modal centering is a `margin: auto` trick,
    which the site's global CSS reset (margin: 0 on every element) breaks —
    without this, the dialog sticks to the top-left corner instead. Centering
-   explicitly via top/left + transform sidesteps that dependency entirely. */
-#renewDialog[open], #holdOpenDialog[open] {
+   explicitly via top/left + transform sidesteps that dependency entirely.
+   This must apply unconditionally, not just under [open]: dialog.close()
+   removes the open attribute immediately, and if centering were scoped to
+   [open] it would vanish the instant close() runs — snapping the dialog
+   out of place for the ~0.15s it's still rendered fading out (via the
+   allow-discrete transition below), producing a corner-jump glitch on
+   close. Only opacity/transform (both transitionable) differ between the
+   open and closed resting states. */
+#renewDialog, #holdOpenDialog {
     position: fixed;
     top: 50%;
     left: 50%;
     right: auto;
     bottom: auto;
     margin: 0;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+    transition: opacity 0.15s ease-out, transform 0.15s ease-out, overlay 0.15s ease-out allow-discrete, display 0.15s ease-out allow-discrete;
+}
+#renewDialog[open], #holdOpenDialog[open] {
+    opacity: 1;
     transform: translate(-50%, -50%) scale(1);
 }
 
@@ -257,10 +280,6 @@
         opacity: 0;
         transform: translate(-50%, -50%) scale(0.96);
     }
-}
-#renewDialog, #holdOpenDialog {
-    opacity: 1;
-    transition: opacity 0.15s ease-out, transform 0.15s ease-out, overlay 0.15s ease-out allow-discrete, display 0.15s ease-out allow-discrete;
 }
 #renewDialog::backdrop, #holdOpenDialog::backdrop {
     transition: background-color 0.15s ease-out;
