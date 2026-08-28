@@ -21,6 +21,7 @@ $router->add('/ingress/api/deployments', ['controller' => 'ingress', 'action' =>
 $router->add('/ingress/api/secrets', ['controller' => 'ingress', 'action' => 'secretsApi'])->via(['GET']);
 $router->add('/ingress/store', ['controller' => 'ingress', 'action' => 'store'])->via(['POST']);
 $router->add('/ingress/{id:[0-9]+}/edit', ['controller' => 'ingress', 'action' => 'edit'])->via(['GET']);
+$router->add('/ingress/{id:[0-9]+}/clone', ['controller' => 'ingress', 'action' => 'clone'])->via(['GET']);
 $router->add('/ingress/{id:[0-9]+}/update', ['controller' => 'ingress', 'action' => 'update'])->via(['POST']);
 $router->add('/ingress/{id:[0-9]+}/delete', ['controller' => 'ingress', 'action' => 'delete'])->via(['POST']);
 $router->add('/ingress/{id:[0-9]+}/retry', ['controller' => 'ingress', 'action' => 'retry'])->via(['POST']);

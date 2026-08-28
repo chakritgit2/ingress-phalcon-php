@@ -149,8 +149,9 @@
                 </td>
                 <td class="px-4 py-3">{% include "partials/badge" with ["status": row.status] %}</td>
                 <td class="px-4 py-3">
+                    <div class="flex flex-wrap items-center gap-1.5">
                     {% if editableIds[row.id] is defined and currentUser.isDevops() %}
-                    <a href="/statefulsets/{{ row.id }}/edit" class="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+                    <a href="/statefulsets/{{ row.id }}/edit" class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
                         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="m16.5 4.5 3 3L7 20H4v-3L16.5 4.5Z"/>
                         </svg>
@@ -158,7 +159,7 @@
                     </a>
                     {% endif %}
                     {% if row.status == 'active' and currentUser.isDevops() %}
-                    <button type="button" class="renewBtn inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20" data-id="{{ row.id }}" data-expires-at="{{ row.expires_at }}" data-developer-name="{{ row.developer_name|e }}">
+                    <button type="button" class="renewBtn inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition hover:bg-emerald-100 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400 dark:hover:bg-emerald-500/20" data-id="{{ row.id }}" data-expires-at="{{ row.expires_at }}" data-developer-name="{{ row.developer_name|e }}">
                         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <circle cx="12" cy="12" r="9"/>
                             <path stroke-linecap="round" d="M12 7v5l3 3"/>
@@ -167,7 +168,7 @@
                     </button>
                     <form class="inline" method="post" action="/statefulsets/{{ row.id }}/delete" onsubmit="return confirm('ยืนยันลบ?');">
                         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
-                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20">
+                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 transition hover:bg-red-100 dark:border-red-500/20 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20">
                             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 .8 12.1a1 1 0 0 0 1 .9h6.4a1 1 0 0 0 1-.9L17 7"/>
                             </svg>
@@ -177,7 +178,7 @@
                     {% elseif row.status == 'failed' and currentUser.isDevops() %}
                     <form class="inline" method="post" action="/statefulsets/{{ row.id }}/retry" onsubmit="return confirm('ลองใหม่อีกครั้ง?');">
                         <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
-                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20">
+                        <button type="submit" class="inline-flex cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-xs font-medium text-blue-700 transition hover:bg-blue-100 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-400 dark:hover:bg-blue-500/20">
                             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a8 8 0 0 1 14.5-4.5M20 15a8 8 0 0 1-14.5 4.5"/>
                             </svg>
@@ -185,6 +186,7 @@
                         </button>
                     </form>
                     {% endif %}
+                    </div>
                 </td>
             </tr>
             {% else %}
@@ -205,14 +207,27 @@
 
 {% if currentUser.isDevops() %}
 <style>
-/* Same dialog-centering fix as ingress/index.volt — see its comment. */
-#renewDialog[open] {
+/* Same dialog-centering fix as ingress/index.volt — see its comment.
+   Centering (position/top/left/margin) must apply unconditionally, not just
+   under [open]: dialog.close() removes the open attribute immediately, and
+   if centering were scoped to [open] it would vanish the instant close()
+   runs — snapping the dialog out of place for the ~0.15s it's still
+   rendered fading out (via the allow-discrete transition below), producing
+   a corner-jump glitch on close. Only opacity/transform (both transitionable)
+   differ between the open and closed resting states. */
+#renewDialog {
     position: fixed;
     top: 50%;
     left: 50%;
     right: auto;
     bottom: auto;
     margin: 0;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.96);
+    transition: opacity 0.15s ease-out, transform 0.15s ease-out, overlay 0.15s ease-out allow-discrete, display 0.15s ease-out allow-discrete;
+}
+#renewDialog[open] {
+    opacity: 1;
     transform: translate(-50%, -50%) scale(1);
 }
 
@@ -221,10 +236,6 @@
         opacity: 0;
         transform: translate(-50%, -50%) scale(0.96);
     }
-}
-#renewDialog {
-    opacity: 1;
-    transition: opacity 0.15s ease-out, transform 0.15s ease-out, overlay 0.15s ease-out allow-discrete, display 0.15s ease-out allow-discrete;
 }
 #renewDialog::backdrop {
     transition: background-color 0.15s ease-out;

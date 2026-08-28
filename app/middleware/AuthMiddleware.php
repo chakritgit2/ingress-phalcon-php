@@ -24,7 +24,7 @@ class AuthMiddleware extends Injectable
      * forward to ingress/index instead.
      */
     private const DEVOPS_ONLY_ACTIONS = [
-        'ingress' => ['create', 'store', 'edit', 'update', 'delete', 'renew', 'deploymentsApi', 'toggleBot', 'bulkDelete', 'bulkRetry'],
+        'ingress' => ['create', 'store', 'edit', 'update', 'clone', 'delete', 'renew', 'deploymentsApi', 'toggleBot', 'bulkDelete', 'bulkRetry'],
         'stateful-set' => ['create', 'store', 'edit', 'update', 'delete', 'renew', 'retry', 'statefulsetsApi', 'toggleBot', 'bulkDelete', 'bulkRetry'],
         'users' => ['index', 'edit', 'updateEmail', 'updateRole', 'toggleActive', 'resetPassword'],
     ];
