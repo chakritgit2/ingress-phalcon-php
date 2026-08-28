@@ -162,9 +162,16 @@ class StatefulSetController extends ControllerBase
         return $this->response->redirect('/statefulsets');
     }
 
-    public function createAction(): void
+    public function createAction()
     {
-        $this->view->setVar('namespaces', $this->kubernetesService->listNamespaces());
+        try {
+            $namespaces = $this->kubernetesService->listNamespaces();
+        } catch (\Throwable $e) {
+            $this->flash->error('ดึงข้อมูล namespace จาก Kubernetes ไม่สำเร็จ: ' . $e->getMessage());
+            return $this->response->redirect('/statefulsets');
+        }
+
+        $this->view->setVar('namespaces', $namespaces);
         $this->view->setVar('developerNameDefault', $this->currentUser()->name);
     }
 
@@ -221,8 +228,16 @@ class StatefulSetController extends ControllerBase
             return;
         }
 
+        try {
+            $namespaces = $this->kubernetesService->listNamespaces();
+        } catch (\Throwable $e) {
+            $this->flash->error('ดึงข้อมูล namespace จาก Kubernetes ไม่สำเร็จ: ' . $e->getMessage());
+            $this->response->redirect('/statefulsets');
+            return;
+        }
+
         $this->view->setVar('row', $row);
-        $this->view->setVar('namespaces', $this->kubernetesService->listNamespaces());
+        $this->view->setVar('namespaces', $namespaces);
     }
 
     public function updateAction($id)
