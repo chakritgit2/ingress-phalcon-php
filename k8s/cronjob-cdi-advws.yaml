@@ -30,7 +30,7 @@ spec:
             kubernetes.io/hostname: kube-database1
           containers:
             - name: sweeper
-              image: cr.advws.com/ingress-advws:e3a8a31
+              image: cr.advws.com/ingress-advws:0e7471c
               # ; not && — each step must still run even if an earlier one
               # fails outright, so one broken step doesn't silently stop the
               # rest. pruneExpired runs before scheduledClose/scheduledReopen
