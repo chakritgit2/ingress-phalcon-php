@@ -4,6 +4,7 @@ namespace App\Controllers;
 
 use App\Models\IngressRequests;
 use App\Models\K8sCommands;
+use App\Models\Users;
 use App\Services\AuditLogService;
 
 class IngressController extends ControllerBase
@@ -73,6 +74,7 @@ class IngressController extends ControllerBase
         $this->view->setVar('filterNamespace', $filters['namespace']);
         $this->view->setVar('filterDeveloperName', $filters['developer_name']);
         $this->view->setVar('filterStatus', $filters['status']);
+        $this->view->setVar('filterQ', $filters['q']);
     }
 
     public function exportAction()
@@ -174,6 +176,7 @@ class IngressController extends ControllerBase
             'namespace' => trim((string) $this->request->getQuery('namespace', 'string', '')),
             'developer_name' => trim((string) $this->request->getQuery('developer_name', 'string', '')),
             'status' => trim((string) $this->request->getQuery('status', 'string', '')),
+            'q' => trim((string) $this->request->getQuery('q', 'string', '')),
         ];
     }
 
@@ -196,6 +199,58 @@ class IngressController extends ControllerBase
         if ($filters['status'] !== '') {
             $conditions[] = 'status = :status:';
             $bind['status'] = $filters['status'];
+        }
+        if ($filters['q'] !== '') {
+            // Free-text search across every field shown/relevant on this
+            // page, plus the creator's email/name -- so one box covers what
+            // would otherwise require picking the right one of the
+            // namespace/developer filters above, or grepping the export CSV
+            // by hand. Model::find()'s 'conditions' is PHQL, not raw SQL, so
+            // a literal "IN (SELECT ...)" subquery against `users` isn't
+            // valid here (PHQL only knows model-mapped columns/joins) --
+            // matching users are looked up in a separate query first and
+            // folded in as a plain IN (:id:, :id:, ...) list instead.
+            $q = $filters['q'];
+            $searchConditions = [
+                'developer_name LIKE :q:',
+                'namespace LIKE :q:',
+                'deployment_name LIKE :q:',
+                'host LIKE :q:',
+                // Bracketed: Phalcon's PHQL lexer mis-tokenizes a bare `note`
+                // column reference as the reserved word `NOT` followed by a
+                // stray `E`, throwing "Column 'e' doesn't belong to any of
+                // the selected models" -- [note] forces it to be read as a
+                // plain identifier instead. Confirmed empirically; every
+                // other column here parses fine unbracketed.
+                '[note] LIKE :q:',
+                'secret_name LIKE :q:',
+                'service_name LIKE :q:',
+                'ingress_name LIKE :q:',
+                'node_ip LIKE :q:',
+                'public_id LIKE :q:',
+                'k8s_uid LIKE :q:',
+            ];
+            $bind['q'] = '%' . $q . '%';
+
+            $matchingUsers = Users::find([
+                'conditions' => 'email LIKE :q: OR name LIKE :q:',
+                'bind' => ['q' => '%' . $q . '%'],
+            ]);
+            if ($matchingUsers->count() > 0) {
+                $userIdPlaceholders = [];
+                foreach ($matchingUsers as $i => $matchingUser) {
+                    $key = "q_uid{$i}";
+                    $userIdPlaceholders[] = ":{$key}:";
+                    $bind[$key] = $matchingUser->id;
+                }
+                $searchConditions[] = 'created_by_user_id IN (' . implode(', ', $userIdPlaceholders) . ')';
+            }
+
+            if (ctype_digit($q)) {
+                $searchConditions[] = 'id = :q_id:';
+                $bind['q_id'] = (int) $q;
+            }
+            $conditions[] = '(' . implode(' OR ', $searchConditions) . ')';
         }
 
         return [$conditions, $bind];
@@ -241,8 +296,12 @@ class IngressController extends ControllerBase
     {
         $row = IngressRequests::findFirst((int) $id);
 
-        if ($row === null || $row->status !== 'expired') {
-            $this->flash->error('ไม่พบรายการ หรือรายการนี้ไม่ใช่รายการที่หมดอายุ');
+        // No status restriction: cloning only reads $row to prefill a brand
+        // new /ingress/store submission (see clone.volt) -- it never touches
+        // the source row itself, so there's nothing unsafe about cloning an
+        // active/pending/closed/failed request, not just an expired one.
+        if ($row === null) {
+            $this->flash->error('ไม่พบรายการ');
             return $this->response->redirect('/ingress');
         }
 

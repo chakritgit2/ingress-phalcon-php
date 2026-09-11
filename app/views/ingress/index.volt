@@ -52,6 +52,10 @@
 
 <form method="get" action="/ingress" class="mb-4 flex flex-wrap items-end gap-3">
     <div>
+        <label class="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300" for="filter_q">ค้นหา (ทุกช่อง)</label>
+        <input class="h-9 w-56 rounded-lg border border-gray-300 px-3 py-1.5 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="text" id="filter_q" name="q" value="{{ filterQ|e }}" placeholder="ID, ใคร, namespace, deployment, host, note, ...">
+    </div>
+    <div>
         <label class="mb-1.5 block text-xs font-medium text-gray-700 dark:text-gray-300" for="filter_namespace">Namespace</label>
         <input class="h-9 rounded-lg border border-gray-300 px-3 py-1.5 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" type="text" id="filter_namespace" name="namespace" value="{{ filterNamespace|e }}" placeholder="namespace">
     </div>
@@ -69,10 +73,10 @@
         </select>
     </div>
     <button type="submit" class="inline-flex h-9 shrink-0 items-center self-end whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 cursor-pointer dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">ค้นหา</button>
-    {% if filterNamespace or filterDeveloperName or filterStatus %}
+    {% if filterNamespace or filterDeveloperName or filterStatus or filterQ %}
     <a href="/ingress" class="inline-flex h-9 shrink-0 items-center self-end whitespace-nowrap text-sm text-gray-500 underline hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200">ล้างข้อมูลการค้นหา</a>
     {% endif %}
-    <a href="/ingress/export?namespace={{ filterNamespace|url_encode }}&developer_name={{ filterDeveloperName|url_encode }}&status={{ filterStatus|url_encode }}" class="inline-flex h-9 shrink-0 items-center self-end gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
+    <a href="/ingress/export?namespace={{ filterNamespace|url_encode }}&developer_name={{ filterDeveloperName|url_encode }}&status={{ filterStatus|url_encode }}&q={{ filterQ|url_encode }}" class="inline-flex h-9 shrink-0 items-center self-end gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 bg-white px-3.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0-4-4m4 4 4-4M5 19h14"/>
         </svg>
@@ -216,7 +220,8 @@
                             ลองใหม่
                         </button>
                     </form>
-                    {% elseif row.status == 'expired' and currentUser.isDevops() %}
+                    {% endif %}
+                    {% if currentUser.isDevops() %}
                     <a href="/ingress/{{ row.id }}/clone" class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-xs font-medium text-indigo-700 shadow-sm transition hover:bg-indigo-100 dark:border-indigo-500/20 dark:bg-indigo-500/10 dark:text-indigo-400 dark:hover:bg-indigo-500/20">
                         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <rect x="9" y="9" width="11" height="11" rx="2"/>
@@ -242,7 +247,7 @@
     </table>
 </div>
 
-{% include "partials/pagination" with ["page": page, "totalPages": totalPages, "totalItems": totalItems, "pageNumbers": pageNumbers, "baseUrl": "/ingress", "extraParams": {"namespace": filterNamespace, "developer_name": filterDeveloperName, "status": filterStatus}] %}
+{% include "partials/pagination" with ["page": page, "totalPages": totalPages, "totalItems": totalItems, "pageNumbers": pageNumbers, "baseUrl": "/ingress", "extraParams": {"namespace": filterNamespace, "developer_name": filterDeveloperName, "status": filterStatus, "q": filterQ}] %}
 
 {% if currentUser.isDevops() %}
 <style>
