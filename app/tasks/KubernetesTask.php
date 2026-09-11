@@ -60,7 +60,9 @@ class KubernetesTask extends Task
                             $row->target_port,
                             $row->host,
                             $row->secret_name,
-                            $row->id
+                            $row->id,
+                            true,
+                            (bool) $row->login_bypass
                         );
                         $row->service_name = $created['service_name'];
                         $row->ingress_name = $created['ingress_name'];
@@ -69,7 +71,10 @@ class KubernetesTask extends Task
                             $row->namespace,
                             $row->deployment_name,
                             $row->target_port,
-                            $row->id
+                            $row->id,
+                            null,
+                            true,
+                            (bool) $row->login_bypass
                         );
                         $row->service_name = $created['service_name'];
                         $row->node_port = $created['node_port'];
@@ -131,6 +136,44 @@ class KubernetesTask extends Task
                             'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
                         ]);
                     }
+
+                    // Same non-fatal not-found/failed/patched logging as
+                    // node_admin_path above, but only attempted (see
+                    // createIngress()/createNodePortService()'s
+                    // $manageLoginBypass arg) when this row's "Login Bypass"
+                    // checkbox was actually checked — an ordinary request
+                    // never touches NO_LINELOGIN, so there's nothing to log.
+                    if ($row->login_bypass) {
+                        if ($created['login_bypass']['found'] === false) {
+                            $this->auditLogService->log('login_bypass_not_found', $actorLabel, [
+                                'ingress_request_id' => $row->id,
+                                'actor_user_id' => $command->requested_by_user_id,
+                                'namespace' => $row->namespace,
+                                'deployment_name' => $row->deployment_name,
+                                'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
+                            ]);
+                        } elseif (isset($created['login_bypass']['error'])) {
+                            $this->auditLogService->log('login_bypass_patch_failed', $actorLabel, [
+                                'ingress_request_id' => $row->id,
+                                'actor_user_id' => $command->requested_by_user_id,
+                                'namespace' => $row->namespace,
+                                'deployment_name' => $row->deployment_name,
+                                'detail' => [
+                                    'namespace' => $row->namespace,
+                                    'deployment_name' => $row->deployment_name,
+                                    'error' => $created['login_bypass']['error'],
+                                ],
+                            ]);
+                        } elseif ($created['login_bypass']['patched'] === true) {
+                            $this->auditLogService->log('login_bypass_patched', $actorLabel, [
+                                'ingress_request_id' => $row->id,
+                                'actor_user_id' => $command->requested_by_user_id,
+                                'namespace' => $row->namespace,
+                                'deployment_name' => $row->deployment_name,
+                                'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
+                            ]);
+                        }
+                    }
                 } else {
                     if ($row->request_type === 'ingress') {
                         $this->kubernetesService->deleteIngress($row->namespace, $row->ingress_name, $row->service_name);
@@ -156,6 +199,10 @@ class KubernetesTask extends Task
                     ]);
 
                     $this->revertNodeAdminPathEnvIfUnused($row, $actorLabel, $command->requested_by_user_id);
+
+                    if ($row->login_bypass) {
+                        $this->revertLoginBypassEnvIfUnused($row, $actorLabel, $command->requested_by_user_id);
+                    }
                 }
 
                 $command->status = 'success';
@@ -277,6 +324,10 @@ class KubernetesTask extends Task
                 // nightly close left in 'closed' (which deliberately skips
                 // this revert) — revert NODE_ADMIN_PATH here unconditionally.
                 $this->revertNodeAdminPathEnvIfUnused($row, 'system:sweeper');
+
+                if ($row->login_bypass) {
+                    $this->revertLoginBypassEnvIfUnused($row, 'system:sweeper');
+                }
 
                 echo "expired  {$row->namespace}/{$row->service_name} (id={$row->id}, was_closed=" . ($wasClosed ? '1' : '0') . ")\n";
             } catch (KubernetesApiException $e) {
@@ -430,6 +481,7 @@ class KubernetesTask extends Task
                         $row->host,
                         $row->secret_name,
                         $row->id,
+                        false,
                         false
                     );
                     $row->service_name = $created['service_name'];
@@ -441,6 +493,7 @@ class KubernetesTask extends Task
                         $row->target_port,
                         $row->id,
                         $priorNodePort,
+                        false,
                         false
                     );
                     $row->service_name = $created['service_name'];
@@ -583,6 +636,58 @@ class KubernetesTask extends Task
             ]);
         } elseif ($reverted['reverted'] === true) {
             $this->auditLogService->log('node_admin_path_reverted', $actorLabel, $context + [
+                'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
+            ]);
+        }
+    }
+
+    /**
+     * Counterpart to revertNodeAdminPathEnvIfUnused() for NO_LINELOGIN —
+     * only ever called when $row->login_bypass is true (see call sites in
+     * processCommandsAction()/pruneExpiredAction()). The "still in use"
+     * guard additionally requires the other active row to itself have
+     * login_bypass set: a plain (non-bypassed) active request on the same
+     * Deployment doesn't need NO_LINELOGIN kept on.
+     */
+    private function revertLoginBypassEnvIfUnused(IngressRequests $row, string $actorLabel, ?int $actorUserId = null): void
+    {
+        $stillInUse = IngressRequests::count([
+            'conditions' => 'namespace = :namespace: AND deployment_name = :deployment_name: AND status = :status: AND login_bypass = 1 AND id != :id:',
+            'bind' => [
+                'namespace' => $row->namespace,
+                'deployment_name' => $row->deployment_name,
+                'status' => 'active',
+                'id' => $row->id,
+            ],
+        ]) > 0;
+
+        if ($stillInUse) {
+            return;
+        }
+
+        $reverted = $this->kubernetesService->revertLoginBypassEnv($row->namespace, $row->deployment_name);
+
+        $context = [
+            'ingress_request_id' => $row->id,
+            'actor_user_id' => $actorUserId,
+            'namespace' => $row->namespace,
+            'deployment_name' => $row->deployment_name,
+        ];
+
+        if ($reverted['found'] === false) {
+            $this->auditLogService->log('login_bypass_revert_not_found', $actorLabel, $context + [
+                'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
+            ]);
+        } elseif (isset($reverted['error'])) {
+            $this->auditLogService->log('login_bypass_revert_failed', $actorLabel, $context + [
+                'detail' => [
+                    'namespace' => $row->namespace,
+                    'deployment_name' => $row->deployment_name,
+                    'error' => $reverted['error'],
+                ],
+            ]);
+        } elseif ($reverted['reverted'] === true) {
+            $this->auditLogService->log('login_bypass_reverted', $actorLabel, $context + [
                 'detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name],
             ]);
         }

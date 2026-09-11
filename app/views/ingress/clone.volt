@@ -1,6 +1,6 @@
 {% extends "layouts/main.volt" %}
 {% block content %}
-<h1 class="mb-6 border-b border-gray-200 pb-4 text-xl font-semibold text-gray-900 dark:border-gray-800 dark:text-white">โคลน Ingress (จากรายการหมดอายุ #{{ row.id }})</h1>
+<h1 class="mb-6 border-b border-gray-200 pb-4 text-xl font-semibold text-gray-900 dark:border-gray-800 dark:text-white">โคลน Ingress (จากรายการ #{{ row.id }})</h1>
 
 <form method="post" action="/ingress/store" class="max-w-md space-y-6">
     <input type="hidden" name="{{ security.getTokenKey() }}" value="{{ security.getToken() }}">
@@ -26,7 +26,7 @@
                 <circle cx="12" cy="12" r="9"/>
                 <path stroke-linecap="round" d="M12 11v5m0-8h.01"/>
             </svg>
-            <span>โคลนนี้จะสร้างเป็นคำขอใหม่แยกต่างหาก รายการเดิมที่หมดอายุจะไม่ถูกแก้ไข</span>
+            <span>โคลนนี้จะสร้างเป็นคำขอใหม่แยกต่างหาก รายการเดิมจะไม่ถูกแก้ไขหรือได้รับผลกระทบใดๆ</span>
         </p>
     </div>
 

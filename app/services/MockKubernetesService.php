@@ -17,8 +17,9 @@ class MockKubernetesService implements KubernetesServiceInterface
     private const DEPLOYMENTS = [
         'qa' => [
             // Carries a NODE_ADMIN_PATH env var set to the "old" /hello-world
-            // value, to demo the patch path locally without a real cluster.
-            ['name' => 'checkout-api', 'replicas' => 2, 'env' => ['NODE_ADMIN_PATH' => '/hello-world']],
+            // value, and a NO_LINELOGIN env var set to its default 'false',
+            // to demo both patch paths locally without a real cluster.
+            ['name' => 'checkout-api', 'replicas' => 2, 'env' => ['NODE_ADMIN_PATH' => '/hello-world', 'NO_LINELOGIN' => 'false']],
             ['name' => 'notification-worker', 'replicas' => 1],
         ],
         'staging' => [
@@ -32,6 +33,8 @@ class MockKubernetesService implements KubernetesServiceInterface
 
     private const NODE_ADMIN_PATH_VALUE = '/nodeadmin';
     private const NODE_ADMIN_PATH_ORIGINAL_VALUE = '/hello-world';
+    private const NO_LINELOGIN_VALUE = 'yes';
+    private const NO_LINELOGIN_ORIGINAL_VALUE = 'false';
 
     private const SECRETS = [
         'qa' => ['qa-wildcard-tls'],
@@ -184,7 +187,7 @@ class MockKubernetesService implements KubernetesServiceInterface
         ];
     }
 
-    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true): array
+    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true, bool $manageLoginBypass = false): array
     {
         $exists = array_filter(
             self::DEPLOYMENTS[$namespace] ?? [],
@@ -197,6 +200,7 @@ class MockKubernetesService implements KubernetesServiceInterface
         $suffix = substr(bin2hex(random_bytes(4)), 0, 6);
 
         $nodeAdminPath = $manageNodeAdminPath ? $this->syncNodeAdminPathEnv($namespace, $deploymentName) : null;
+        $loginBypass = $manageLoginBypass ? $this->syncLoginBypassEnv($namespace, $deploymentName) : null;
 
         $resolvedTargetPort = $this->resolveTargetPort(array_shift($exists));
 
@@ -236,6 +240,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                 random_int(0, 0xffffffffffff)
             ),
             'node_admin_path' => $nodeAdminPath,
+            'login_bypass' => $loginBypass,
         ];
     }
 
@@ -249,7 +254,7 @@ class MockKubernetesService implements KubernetesServiceInterface
         // No-op: nothing real to delete.
     }
 
-    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId, bool $manageNodeAdminPath = true): array
+    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId, bool $manageNodeAdminPath = true, bool $manageLoginBypass = false): array
     {
         $exists = array_filter(
             self::DEPLOYMENTS[$namespace] ?? [],
@@ -264,6 +269,7 @@ class MockKubernetesService implements KubernetesServiceInterface
         $ingressName = "tmp-ingress-{$suffix}";
 
         $nodeAdminPath = $manageNodeAdminPath ? $this->syncNodeAdminPathEnv($namespace, $deploymentName) : null;
+        $loginBypass = $manageLoginBypass ? $this->syncLoginBypassEnv($namespace, $deploymentName) : null;
 
         $resolvedTargetPort = $this->resolveTargetPort(array_shift($exists));
 
@@ -332,6 +338,7 @@ class MockKubernetesService implements KubernetesServiceInterface
                 random_int(0, 0xffffffffffff)
             ),
             'node_admin_path' => $nodeAdminPath,
+            'login_bypass' => $loginBypass,
         ];
     }
 
@@ -362,7 +369,7 @@ class MockKubernetesService implements KubernetesServiceInterface
      */
     private function syncNodeAdminPathEnv(string $namespace, string $deploymentName): array
     {
-        $result = $this->patchNodeAdminPathEnvIfPresent($namespace, $deploymentName, self::NODE_ADMIN_PATH_VALUE);
+        $result = $this->patchDeploymentEnvIfPresent($namespace, $deploymentName, 'NODE_ADMIN_PATH', self::NODE_ADMIN_PATH_VALUE);
         return ['found' => $result['found'], 'patched' => $result['patched']];
     }
 
@@ -376,14 +383,44 @@ class MockKubernetesService implements KubernetesServiceInterface
      */
     public function revertNodeAdminPathEnv(string $namespace, string $deploymentName): array
     {
-        $result = $this->patchNodeAdminPathEnvIfPresent($namespace, $deploymentName, self::NODE_ADMIN_PATH_ORIGINAL_VALUE);
+        $result = $this->patchDeploymentEnvIfPresent($namespace, $deploymentName, 'NODE_ADMIN_PATH', self::NODE_ADMIN_PATH_ORIGINAL_VALUE);
         return ['found' => $result['found'], 'reverted' => $result['patched']];
     }
 
     /**
+     * Mirrors KubernetesService::syncLoginBypassEnv() against the flat mock
+     * DEPLOYMENTS data — same simplified stand-in as syncNodeAdminPathEnv().
+     *
      * @return array{found: bool, patched: bool}
      */
-    private function patchNodeAdminPathEnvIfPresent(string $namespace, string $deploymentName, string $targetValue): array
+    private function syncLoginBypassEnv(string $namespace, string $deploymentName): array
+    {
+        $result = $this->patchDeploymentEnvIfPresent($namespace, $deploymentName, 'NO_LINELOGIN', self::NO_LINELOGIN_VALUE);
+        return ['found' => $result['found'], 'patched' => $result['patched']];
+    }
+
+    /**
+     * Mirrors KubernetesService::revertLoginBypassEnv() against the mock
+     * data — same behaviour as revertNodeAdminPathEnv().
+     *
+     * @return array{found: bool, reverted: bool}
+     */
+    public function revertLoginBypassEnv(string $namespace, string $deploymentName): array
+    {
+        $result = $this->patchDeploymentEnvIfPresent($namespace, $deploymentName, 'NO_LINELOGIN', self::NO_LINELOGIN_ORIGINAL_VALUE);
+        return ['found' => $result['found'], 'reverted' => $result['patched']];
+    }
+
+    /**
+     * Shared by syncNodeAdminPathEnv()/revertNodeAdminPathEnv() and
+     * syncLoginBypassEnv()/revertLoginBypassEnv() — mirrors
+     * KubernetesService::patchDeploymentEnvIfPresent() against the flat mock
+     * DEPLOYMENTS data (no real container/env array to index into, so this
+     * is a simplified single-value stand-in, not a literal JSON Patch path).
+     *
+     * @return array{found: bool, patched: bool}
+     */
+    private function patchDeploymentEnvIfPresent(string $namespace, string $deploymentName, string $envName, string $targetValue): array
     {
         $matches = array_filter(
             self::DEPLOYMENTS[$namespace] ?? [],
@@ -391,7 +428,7 @@ class MockKubernetesService implements KubernetesServiceInterface
         );
         $deployment = array_shift($matches);
 
-        $currentValue = $deployment['env']['NODE_ADMIN_PATH'] ?? null;
+        $currentValue = $deployment['env'][$envName] ?? null;
 
         if ($currentValue === null) {
             return ['found' => false, 'patched' => false];

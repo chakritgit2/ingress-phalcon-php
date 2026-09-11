@@ -22,6 +22,12 @@
     {{ detail['namespace']|e }} / {{ detail['deployment_name']|e }} &middot; {{ detail['error']|e }}
 {% elseif event_type == 'node_admin_path_reverted' or event_type == 'node_admin_path_revert_not_found' %}
     {{ detail['namespace']|e }} / {{ detail['deployment_name']|e }}
+{% elseif event_type == 'login_bypass_patched' or event_type == 'login_bypass_not_found' %}
+    {{ detail['namespace']|e }} / {{ detail['deployment_name']|e }}
+{% elseif event_type == 'login_bypass_patch_failed' or event_type == 'login_bypass_revert_failed' %}
+    {{ detail['namespace']|e }} / {{ detail['deployment_name']|e }} &middot; {{ detail['error']|e }}
+{% elseif event_type == 'login_bypass_reverted' or event_type == 'login_bypass_revert_not_found' %}
+    {{ detail['namespace']|e }} / {{ detail['deployment_name']|e }}
 {% elseif detail['request_type'] is defined %}
     {{ detail['request_type']|e }}{% if detail['target_port'] is defined %} &middot; port {{ detail['target_port'] }}{% endif %}{% if detail['host'] is defined and detail['host'] %} &middot; host: {{ detail['host']|e }}{% endif %}{% if detail['note'] is defined and detail['note'] %} &middot; หมายเหตุ: {{ detail['note']|e }}{% endif %}
 {% else %}

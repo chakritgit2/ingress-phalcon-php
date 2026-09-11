@@ -21,6 +21,9 @@ class KubernetesService implements KubernetesServiceInterface
     private const NODE_ADMIN_PATH_ENV_NAME = 'NODE_ADMIN_PATH';
     private const NODE_ADMIN_PATH_VALUE = '/nodeadmin';
     private const NODE_ADMIN_PATH_ORIGINAL_VALUE = '/hello-world';
+    private const NO_LINELOGIN_ENV_NAME = 'NO_LINELOGIN';
+    private const NO_LINELOGIN_VALUE = 'yes';
+    private const NO_LINELOGIN_ORIGINAL_VALUE = 'false';
 
     // The Service's own exposed port is always 80 — for NodePort-type it's
     // irrelevant anyway (external access goes through the k8s-assigned
@@ -183,9 +186,9 @@ class KubernetesService implements KubernetesServiceInterface
     }
 
     /**
-     * @return array{service_name: string, node_port: int, k8s_uid: string, node_admin_path: ?array}
+     * @return array{service_name: string, node_port: int, k8s_uid: string, node_admin_path: ?array, login_bypass: ?array}
      */
-    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true): array
+    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true, bool $manageLoginBypass = false): array
     {
         $namespace = $this->assertValidLabel($namespace, 'namespace');
         $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
@@ -201,7 +204,7 @@ class KubernetesService implements KubernetesServiceInterface
         // a second, orphaned one.
         $existing = $this->findServiceByRequestId($namespace, $requestId);
         if ($existing !== null) {
-            return $existing + ['node_admin_path' => null];
+            return $existing + ['node_admin_path' => null, 'login_bypass' => null];
         }
 
         $deployment = $this->getDeployment($namespace, $deploymentName);
@@ -215,6 +218,7 @@ class KubernetesService implements KubernetesServiceInterface
         }
 
         $nodeAdminPath = $manageNodeAdminPath ? $this->syncNodeAdminPathEnv($namespace, $deploymentName, $deployment) : null;
+        $loginBypass = $manageLoginBypass ? $this->syncLoginBypassEnv($namespace, $deploymentName, $deployment) : null;
 
         $resolvedTargetPort = $this->resolveTargetPort($deployment);
 
@@ -229,6 +233,7 @@ class KubernetesService implements KubernetesServiceInterface
             'node_port' => $created['spec']['ports'][0]['nodePort'],
             'k8s_uid' => $created['metadata']['uid'],
             'node_admin_path' => $nodeAdminPath,
+            'login_bypass' => $loginBypass,
         ];
     }
 
@@ -297,9 +302,9 @@ class KubernetesService implements KubernetesServiceInterface
     }
 
     /**
-     * @return array{service_name: string, ingress_name: string, k8s_uid: string, node_admin_path: ?array}
+     * @return array{service_name: string, ingress_name: string, k8s_uid: string, node_admin_path: ?array, login_bypass: ?array}
      */
-    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId, bool $manageNodeAdminPath = true): array
+    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId, bool $manageNodeAdminPath = true, bool $manageLoginBypass = false): array
     {
         $namespace = $this->assertValidLabel($namespace, 'namespace');
         $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
@@ -311,7 +316,7 @@ class KubernetesService implements KubernetesServiceInterface
         // Ingress this time (its backend service name is read back from it).
         $existingIngress = $this->findIngressByRequestId($namespace, $requestId);
         if ($existingIngress !== null) {
-            return $existingIngress + ['node_admin_path' => null];
+            return $existingIngress + ['node_admin_path' => null, 'login_bypass' => null];
         }
 
         $deployment = $this->getDeployment($namespace, $deploymentName);
@@ -325,6 +330,7 @@ class KubernetesService implements KubernetesServiceInterface
         }
 
         $nodeAdminPath = $manageNodeAdminPath ? $this->syncNodeAdminPathEnv($namespace, $deploymentName, $deployment) : null;
+        $loginBypass = $manageLoginBypass ? $this->syncLoginBypassEnv($namespace, $deploymentName, $deployment) : null;
 
         $labels = $this->buildManagedLabels($deploymentName, $requestId);
 
@@ -347,6 +353,7 @@ class KubernetesService implements KubernetesServiceInterface
             'ingress_name' => $createdIngress['metadata']['name'],
             'k8s_uid' => $createdIngress['metadata']['uid'],
             'node_admin_path' => $nodeAdminPath,
+            'login_bypass' => $loginBypass,
         ];
     }
 
@@ -370,7 +377,7 @@ class KubernetesService implements KubernetesServiceInterface
      */
     private function syncNodeAdminPathEnv(string $namespace, string $deploymentName, array $deployment): array
     {
-        return $this->patchNodeAdminPathEnvIfPresent($namespace, $deploymentName, $deployment, self::NODE_ADMIN_PATH_VALUE);
+        return $this->patchDeploymentEnvIfPresent($namespace, $deploymentName, $deployment, self::NODE_ADMIN_PATH_ENV_NAME, self::NODE_ADMIN_PATH_VALUE);
     }
 
     /**
@@ -390,6 +397,47 @@ class KubernetesService implements KubernetesServiceInterface
      */
     public function revertNodeAdminPathEnv(string $namespace, string $deploymentName): array
     {
+        return $this->revertDeploymentEnv($namespace, $deploymentName, self::NODE_ADMIN_PATH_ENV_NAME, self::NODE_ADMIN_PATH_ORIGINAL_VALUE);
+    }
+
+    /**
+     * Same idea as syncNodeAdminPathEnv(), but for the NO_LINELOGIN env var
+     * that the "Login Bypass" checkbox on the ingress create/edit form
+     * controls. Only invoked when that checkbox was checked (see
+     * createNodePortService()/createIngress()'s $manageLoginBypass param) —
+     * unlike NODE_ADMIN_PATH, this is opt-in per request rather than always
+     * attempted.
+     *
+     * @return array{found: bool, patched: bool, error?: string}
+     */
+    private function syncLoginBypassEnv(string $namespace, string $deploymentName, array $deployment): array
+    {
+        return $this->patchDeploymentEnvIfPresent($namespace, $deploymentName, $deployment, self::NO_LINELOGIN_ENV_NAME, self::NO_LINELOGIN_VALUE);
+    }
+
+    /**
+     * Counterpart to syncLoginBypassEnv() — called when a request whose
+     * login_bypass flag was set is deleted or expires, to put NO_LINELOGIN
+     * back to 'false'. Same "caller must check no other active bypassed
+     * request still targets the same Deployment" contract as
+     * revertNodeAdminPathEnv().
+     *
+     * @return array{found: bool, reverted: bool, error?: string}
+     */
+    public function revertLoginBypassEnv(string $namespace, string $deploymentName): array
+    {
+        return $this->revertDeploymentEnv($namespace, $deploymentName, self::NO_LINELOGIN_ENV_NAME, self::NO_LINELOGIN_ORIGINAL_VALUE);
+    }
+
+    /**
+     * Shared by revertNodeAdminPathEnv() and revertLoginBypassEnv() — fetches
+     * the Deployment fresh (delete has no reason to already have it in hand)
+     * and patches $envName back to $originalValue if present.
+     *
+     * @return array{found: bool, reverted: bool, error?: string}
+     */
+    private function revertDeploymentEnv(string $namespace, string $deploymentName, string $envName, string $originalValue): array
+    {
         $namespace = $this->assertValidLabel($namespace, 'namespace');
         $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
 
@@ -398,7 +446,7 @@ class KubernetesService implements KubernetesServiceInterface
             return ['found' => false, 'reverted' => false];
         }
 
-        $result = $this->patchNodeAdminPathEnvIfPresent($namespace, $deploymentName, $deployment, self::NODE_ADMIN_PATH_ORIGINAL_VALUE);
+        $result = $this->patchDeploymentEnvIfPresent($namespace, $deploymentName, $deployment, $envName, $originalValue);
 
         $reverted = ['found' => $result['found'], 'reverted' => $result['patched']];
         if (isset($result['error'])) {
@@ -409,14 +457,32 @@ class KubernetesService implements KubernetesServiceInterface
     }
 
     /**
-     * Shared by syncNodeAdminPathEnv() (patches to NODE_ADMIN_PATH_VALUE on
-     * create) and revertNodeAdminPathEnv() (patches to
-     * NODE_ADMIN_PATH_ORIGINAL_VALUE on delete/expire) — same scan-every-
-     * container-and-patch-what-differs logic, only $targetValue differs.
+     * Scans every container in the target Deployment's pod spec for an env
+     * entry named $envName. If found anywhere with a value other than
+     * $targetValue, patches it there via a single JSON Patch call — one
+     * `replace` op per occurrence, since a Deployment can (rarely) carry
+     * more than one container defining it. Never adds the env var to a
+     * container that doesn't already declare it (found=false instead) —
+     * callers only manage env vars a Deployment already opts into. Skips the
+     * PATCH entirely if every occurrence already holds the target value:
+     * patching a Deployment's pod template triggers a rollout, so a no-op
+     * patch would otherwise restart pods on every retry/re-create against an
+     * already-correct Deployment.
+     *
+     * A failed PATCH (e.g. the ServiceAccount lacks `patch` on deployments)
+     * is caught rather than propagated: this sync is a side effect of
+     * creating/deleting the Ingress/Service, not the point of the request,
+     * so it must never fail the whole command. The error is returned instead
+     * so the caller can still audit-log it.
+     *
+     * Shared by syncNodeAdminPathEnv()/revertNodeAdminPathEnv() and
+     * syncLoginBypassEnv()/revertLoginBypassEnv() — same scan-every-
+     * container-and-patch-what-differs logic, only $envName/$targetValue
+     * differ.
      *
      * @return array{found: bool, patched: bool, error?: string}
      */
-    private function patchNodeAdminPathEnvIfPresent(string $namespace, string $deploymentName, array $deployment, string $targetValue): array
+    private function patchDeploymentEnvIfPresent(string $namespace, string $deploymentName, array $deployment, string $envName, string $targetValue): array
     {
         $containers = $deployment['spec']['template']['spec']['containers'] ?? [];
         $ops = [];
@@ -424,7 +490,7 @@ class KubernetesService implements KubernetesServiceInterface
 
         foreach ($containers as $ci => $container) {
             foreach ($container['env'] ?? [] as $ei => $envVar) {
-                if (($envVar['name'] ?? null) !== self::NODE_ADMIN_PATH_ENV_NAME) {
+                if (($envVar['name'] ?? null) !== $envName) {
                     continue;
                 }
 
