@@ -306,6 +306,7 @@ class IngressController extends ControllerBase
             'secret_name' => $this->request->getPost('secret_name', 'string', ''),
             'schedule_end_minutes' => $this->request->getPost('schedule_end_minutes', 'int'),
             'note' => $this->request->getPost('note', 'string', ''),
+            'login_bypass' => $this->request->getPost('login_bypass', 'int', 0),
         ];
 
         try {
@@ -364,6 +365,7 @@ class IngressController extends ControllerBase
             'secret_name' => $this->request->getPost('secret_name', 'string', ''),
             'schedule_end_minutes' => $this->request->getPost('schedule_end_minutes', 'int'),
             'note' => $this->request->getPost('note', 'string', ''),
+            'login_bypass' => $this->request->getPost('login_bypass', 'int', 0),
         ];
 
         try {

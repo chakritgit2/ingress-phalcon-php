@@ -68,15 +68,21 @@ interface KubernetesServiceInterface
      * false — used by the nightly reopen sweep, which must never touch this
      * env var (patching it triggers a Deployment rollout/pod restart).
      *
+     * login_bypass reports the same shape as node_admin_path, but for the
+     * NO_LINELOGIN env var controlled by the ingress form's "Login Bypass"
+     * checkbox — only attempted (non-null) when $manageLoginBypass is true,
+     * which callers should only pass when the owning request's login_bypass
+     * flag is set. `null` when not attempted.
+     *
      * $preferredNodePort, if given, is requested explicitly instead of
      * letting Kubernetes assign one — used by the nightly reopen sweep to
      * try to keep the same NodePort number the developer was already given.
      * Falls back to a fresh, Kubernetes-assigned port if the preferred one
      * was claimed by something else in the meantime.
      *
-     * @return array{service_name: string, node_port: int, k8s_uid: string, node_admin_path: ?array{found: bool, patched: bool, error?: string}}
+     * @return array{service_name: string, node_port: int, k8s_uid: string, node_admin_path: ?array{found: bool, patched: bool, error?: string}, login_bypass: ?array{found: bool, patched: bool, error?: string}}
      */
-    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true): array;
+    public function createNodePortService(string $namespace, string $deploymentName, int $targetPort, int $requestId, ?int $preferredNodePort = null, bool $manageNodeAdminPath = true, bool $manageLoginBypass = false): array;
 
     /**
      * Same idea as createNodePortService(), but targets a StatefulSet
@@ -108,17 +114,29 @@ interface KubernetesServiceInterface
     public function revertNodeAdminPathEnv(string $namespace, string $deploymentName): array;
 
     /**
+     * Counterpart to createNodePortService()/createIngress()'s login_bypass
+     * patch — called when a request whose login_bypass flag was set is
+     * deleted or expires, to put NO_LINELOGIN back to 'false' on the target
+     * Deployment. Same contract as revertNodeAdminPathEnv(): callers must
+     * check no other active bypassed request still targets the same
+     * Deployment before calling this.
+     *
+     * @return array{found: bool, reverted: bool, error?: string}
+     */
+    public function revertLoginBypassEnv(string $namespace, string $deploymentName): array;
+
+    /**
      * Creates a backing ClusterIP Service (same idempotency behaviour as
      * createNodePortService) plus an Ingress routing $host through it with
      * TLS terminated using the given (pre-existing) Secret.
      *
-     * See createNodePortService() for what node_admin_path reports (including
-     * the null-when-$manageNodeAdminPath-is-false case), and for why
+     * See createNodePortService() for what node_admin_path/login_bypass
+     * report (including the null-when-not-managed case), and for why
      * $targetPort no longer determines the Service/Ingress's real ports.
      *
-     * @return array{service_name: string, ingress_name: string, k8s_uid: string, node_admin_path: ?array{found: bool, patched: bool, error?: string}}
+     * @return array{service_name: string, ingress_name: string, k8s_uid: string, node_admin_path: ?array{found: bool, patched: bool, error?: string}, login_bypass: ?array{found: bool, patched: bool, error?: string}}
      */
-    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId, bool $manageNodeAdminPath = true): array;
+    public function createIngress(string $namespace, string $deploymentName, int $targetPort, string $host, string $secretName, int $requestId, bool $manageNodeAdminPath = true, bool $manageLoginBypass = false): array;
 
     public function deleteIngress(string $namespace, string $ingressName, string $serviceName): void;
 

@@ -50,6 +50,18 @@
 <span class="inline-flex items-center gap-1.5 rounded-full bg-yellow-50 px-2.5 py-1 text-xs font-medium text-yellow-700 ring-1 ring-inset ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20">ไม่พบ NODE_ADMIN_PATH — ข้ามการคืนค่า</span>
 {% elseif event_type == 'node_admin_path_revert_failed' %}
 <span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20">คืนค่า NODE_ADMIN_PATH ล้มเหลว</span>
+{% elseif event_type == 'login_bypass_patched' %}
+<span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/20">แก้ไข NO_LINELOGIN</span>
+{% elseif event_type == 'login_bypass_not_found' %}
+<span class="inline-flex items-center gap-1.5 rounded-full bg-yellow-50 px-2.5 py-1 text-xs font-medium text-yellow-700 ring-1 ring-inset ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20">ไม่พบ NO_LINELOGIN — ข้าม</span>
+{% elseif event_type == 'login_bypass_patch_failed' %}
+<span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20">แก้ไข NO_LINELOGIN ล้มเหลว</span>
+{% elseif event_type == 'login_bypass_reverted' %}
+<span class="inline-flex items-center gap-1.5 rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-700 ring-1 ring-inset ring-green-600/20 dark:bg-green-500/10 dark:text-green-400 dark:ring-green-500/20">คืนค่า NO_LINELOGIN</span>
+{% elseif event_type == 'login_bypass_revert_not_found' %}
+<span class="inline-flex items-center gap-1.5 rounded-full bg-yellow-50 px-2.5 py-1 text-xs font-medium text-yellow-700 ring-1 ring-inset ring-yellow-600/20 dark:bg-yellow-500/10 dark:text-yellow-400 dark:ring-yellow-500/20">ไม่พบ NO_LINELOGIN — ข้ามการคืนค่า</span>
+{% elseif event_type == 'login_bypass_revert_failed' %}
+<span class="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-xs font-medium text-red-700 ring-1 ring-inset ring-red-600/20 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-500/20">คืนค่า NO_LINELOGIN ล้มเหลว</span>
 {% else %}
 {{ event_type }}
 {% endif %}

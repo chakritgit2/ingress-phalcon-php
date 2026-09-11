@@ -59,6 +59,7 @@ class IngressRequestService
         $row->secret_name = $normalized['secret_name'];
         $row->schedule_end_minutes = $normalized['schedule_end_minutes'];
         $row->note = $normalized['note'];
+        $row->login_bypass = $normalized['login_bypass'] ? 1 : 0;
         $row->created_by_user_id = $user->id;
         $row->status = 'pending';
 
@@ -101,6 +102,7 @@ class IngressRequestService
         $row->secret_name = $normalized['secret_name'];
         $row->schedule_end_minutes = $normalized['schedule_end_minutes'];
         $row->note = $normalized['note'];
+        $row->login_bypass = $normalized['login_bypass'] ? 1 : 0;
 
         if (!$row->save()) {
             throw new \RuntimeException(implode(', ', array_map(
@@ -122,6 +124,7 @@ class IngressRequestService
                 'secret_name' => $row->secret_name,
                 'target_port' => $row->target_port,
                 'note' => $row->note,
+                'login_bypass' => $row->login_bypass,
             ],
         ]);
     }
@@ -215,6 +218,7 @@ class IngressRequestService
             'secret_name' => $requestType === 'ingress' ? $secretName : null,
             'schedule_end_minutes' => $scheduleMinutes,
             'note' => $note !== '' ? $note : null,
+            'login_bypass' => !empty($data['login_bypass']),
         ];
     }
 
