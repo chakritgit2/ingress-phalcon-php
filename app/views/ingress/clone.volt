@@ -97,6 +97,14 @@
     </div>
 
     <div>
+        <label class="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+            <input type="checkbox" name="login_bypass" value="1" {{ row.login_bypass ? 'checked' : '' }} class="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800">
+            Login Bypass
+        </label>
+        <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">ปิดการตรวจสอบ LINE Login ชั่วคราว (ตั้งค่า NO_LINELOGIN=yes บน Deployment) — จะถูกคืนค่ากลับเป็น false อัตโนมัติเมื่อ Ingress นี้ถูกลบหรือหมดอายุ</p>
+    </div>
+
+    <div>
         <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300" for="note">หมายเหตุ (ถ้ามี)</label>
         <textarea class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm transition focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100" id="note" name="note" rows="2" maxlength="255" placeholder="เหตุผลที่ขอ เช่น ทดสอบ feature X ให้ทีม QA">{{ row.note|e }}</textarea>
     </div>
