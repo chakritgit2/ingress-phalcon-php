@@ -76,18 +76,26 @@ class IngressRequestService
     }
 
     /**
-     * Only reachable when isEditable($row) — i.e. no live Service/Ingress
-     * exists yet for this request (still `pending`, or `failed` on its
-     * `create` attempt). Just corrects the DB row: for `pending` rows the
-     * already-queued `k8s_commands` row will read the corrected fields
-     * straight off $row on its next tick (see KubernetesTask::processCommandsAction()),
-     * so nothing else needs to change here; for `failed` rows the user
-     * retries separately via the existing retry() flow.
+     * Only reachable when isEditable($row). For `pending` rows (or `failed`
+     * on its `create` attempt) there's no live Service/Ingress yet, so this
+     * just corrects the DB row — the already-queued `k8s_commands` row (for
+     * `pending`) will read the corrected fields straight off $row on its
+     * next tick (see KubernetesTask::processCommandsAction()); `failed` rows
+     * are retried separately via the existing retry() flow. For `active`
+     * rows a live Service/Ingress already exists and this app has no patch
+     * mechanism for namespace/deployment/port/host/type on it, so that case
+     * is delegated to updateActiveRow(), which only allows the fields that
+     * have no cluster-state implication (plus login_bypass, patched live).
      */
     public function update(IngressRequests $row, array $data, Users $user): void
     {
         if (!$this->isEditable($row)) {
             throw new \RuntimeException('รายการนี้ไม่สามารถแก้ไขได้แล้ว');
+        }
+
+        if ($row->status === 'active') {
+            $this->updateActiveRow($row, $data, $user);
+            return;
         }
 
         $normalized = $this->validateAndNormalize($data);
@@ -130,15 +138,130 @@ class IngressRequestService
     }
 
     /**
-     * true only when no live Service/Ingress can exist for $row yet:
-     * `pending` always follows a `create` action in this state machine (see
-     * retry()'s status assignment below), and a `failed` row is only safe
-     * to edit if its last command was the `create` attempt itself failing
-     * — a failed `delete` may still correspond to a real cluster resource.
+     * Only reachable via update()'s `active` branch. A live Service/Ingress
+     * already exists for this row, so only developer_name/note (plain DB
+     * fields) and login_bypass are allowed to change — namespace,
+     * deployment_name, request_type, target_port, host, secret_name and
+     * schedule_end_minutes are left untouched (the edit form for an active
+     * row doesn't even submit them). login_bypass is the one field here
+     * with a live cluster counterpart — the NO_LINELOGIN env var on the
+     * Deployment — so it's patched/reverted synchronously via
+     * KubernetesService::setLoginBypassEnv() instead of going through the
+     * async k8s_commands queue create()/delete() use: there's no create or
+     * delete command in flight here to piggyback the env sync onto.
+     */
+    private function updateActiveRow(IngressRequests $row, array $data, Users $user): void
+    {
+        $developerName = trim((string) ($data['developer_name'] ?? ''));
+        if ($developerName === '') {
+            throw new \InvalidArgumentException('กรุณาระบุชื่อ Developer');
+        }
+
+        $note = trim((string) ($data['note'] ?? ''));
+        if (strlen($note) > self::MAX_NOTE_LENGTH) {
+            throw new \InvalidArgumentException('หมายเหตุยาวเกินไป (ไม่เกิน ' . self::MAX_NOTE_LENGTH . ' ตัวอักษร)');
+        }
+
+        $newLoginBypass = !empty($data['login_bypass']);
+        $bypassTurnedOn = $newLoginBypass && !$row->login_bypass;
+        $bypassTurnedOff = !$newLoginBypass && (bool) $row->login_bypass;
+
+        $row->developer_name = $developerName;
+        $row->note = $note !== '' ? $note : null;
+        $row->login_bypass = $newLoginBypass ? 1 : 0;
+
+        if (!$row->save()) {
+            throw new \RuntimeException(implode(', ', array_map(
+                fn ($m) => $m->getMessage(),
+                $row->getMessages()
+            )));
+        }
+
+        $actorLabel = AuditLogService::actorLabelFor($user);
+
+        $this->auditLogService->log('ingress_updated', $actorLabel, [
+            'ingress_request_id' => $row->id,
+            'actor_user_id' => $user->id,
+            'namespace' => $row->namespace,
+            'deployment_name' => $row->deployment_name,
+            'node_port' => $row->node_port,
+            'node_ip' => $row->node_ip,
+            'detail' => [
+                'note' => $row->note,
+                'login_bypass' => $row->login_bypass,
+            ],
+        ]);
+
+        if ($bypassTurnedOn) {
+            $this->syncLoginBypassPatch($row, true, $actorLabel, $user->id);
+        } elseif ($bypassTurnedOff && !$this->loginBypassStillNeededElsewhere($row)) {
+            $this->syncLoginBypassPatch($row, false, $actorLabel, $user->id);
+        }
+    }
+
+    /**
+     * Same "another active bypassed request on the same Deployment still
+     * needs NO_LINELOGIN on" guard as
+     * KubernetesTask::revertLoginBypassEnvIfUnused() — duplicated rather
+     * than shared since that one is private to the task and bundles in its
+     * own audit-logging shape.
+     */
+    private function loginBypassStillNeededElsewhere(IngressRequests $row): bool
+    {
+        return IngressRequests::count([
+            'conditions' => 'namespace = :namespace: AND deployment_name = :deployment_name: AND status = :status: AND login_bypass = 1 AND id != :id:',
+            'bind' => [
+                'namespace' => $row->namespace,
+                'deployment_name' => $row->deployment_name,
+                'status' => 'active',
+                'id' => $row->id,
+            ],
+        ]) > 0;
+    }
+
+    /**
+     * Patches/reverts NO_LINELOGIN on $row's Deployment and audit-logs the
+     * outcome, reusing the same login_bypass_* event types
+     * KubernetesTask::processCommandsAction()/revertLoginBypassEnvIfUnused()
+     * already log at create/delete time — the event badges/details views
+     * render those generically, with no assumption about which flow logged
+     * them.
+     */
+    private function syncLoginBypassPatch(IngressRequests $row, bool $enable, string $actorLabel, int $actorUserId): void
+    {
+        $result = $this->kubernetesService->setLoginBypassEnv($row->namespace, $row->deployment_name, $enable);
+
+        $context = [
+            'ingress_request_id' => $row->id,
+            'actor_user_id' => $actorUserId,
+            'namespace' => $row->namespace,
+            'deployment_name' => $row->deployment_name,
+        ];
+        $detail = ['detail' => ['namespace' => $row->namespace, 'deployment_name' => $row->deployment_name]];
+
+        if ($result['found'] === false) {
+            $this->auditLogService->log($enable ? 'login_bypass_not_found' : 'login_bypass_revert_not_found', $actorLabel, $context + $detail);
+        } elseif (isset($result['error'])) {
+            $this->auditLogService->log($enable ? 'login_bypass_patch_failed' : 'login_bypass_revert_failed', $actorLabel, $context + [
+                'detail' => $detail['detail'] + ['error' => $result['error']],
+            ]);
+        } elseif ($result['patched'] === true) {
+            $this->auditLogService->log($enable ? 'login_bypass_patched' : 'login_bypass_reverted', $actorLabel, $context + $detail);
+        }
+    }
+
+    /**
+     * true when no live Service/Ingress can exist for $row yet, or one
+     * already exists and can have login_bypass patched live: `pending`
+     * always follows a `create` action in this state machine (see
+     * retry()'s status assignment below), `failed` is only safe to edit if
+     * its last command was the `create` attempt itself failing — a failed
+     * `delete` may still correspond to a real cluster resource — and
+     * `active` is handled by updateActiveRow()'s restricted field set.
      */
     public function isEditable(IngressRequests $row): bool
     {
-        if ($row->status === 'pending') {
+        if ($row->status === 'pending' || $row->status === 'active') {
             return true;
         }
 

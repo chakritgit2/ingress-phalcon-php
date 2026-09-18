@@ -126,6 +126,20 @@ interface KubernetesServiceInterface
     public function revertLoginBypassEnv(string $namespace, string $deploymentName): array;
 
     /**
+     * Patches NO_LINELOGIN on an already-live Deployment directly to $enable
+     * ? 'yes' : 'false' — used when the Login Bypass checkbox on an
+     * `active` request is toggled from the edit form, where there's no
+     * create/delete command in flight to piggyback the env sync onto the
+     * way createNodePortService()/createIngress()/revertLoginBypassEnv() do.
+     * Same "caller must check no other active bypassed request still
+     * targets the same Deployment before disabling" contract as
+     * revertLoginBypassEnv() when $enable is false.
+     *
+     * @return array{found: bool, patched: bool, error?: string}
+     */
+    public function setLoginBypassEnv(string $namespace, string $deploymentName, bool $enable): array;
+
+    /**
      * Creates a backing ClusterIP Service (same idempotency behaviour as
      * createNodePortService) plus an Ingress routing $host through it with
      * TLS terminated using the given (pre-existing) Secret.

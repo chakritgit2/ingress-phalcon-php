@@ -388,6 +388,15 @@ class IngressController extends ControllerBase
             return;
         }
 
+        // An `active` row already has a live Service/Ingress — see
+        // IngressRequestService::updateActiveRow() — so it gets a separate,
+        // much narrower edit form instead of the full create-style one.
+        if ($row->status === 'active') {
+            $this->view->pick('ingress/edit_active');
+            $this->view->setVar('row', $row);
+            return;
+        }
+
         try {
             $namespaces = $this->kubernetesService->listNamespaces();
         } catch (\Throwable $e) {

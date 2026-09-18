@@ -430,6 +430,33 @@ class KubernetesService implements KubernetesServiceInterface
     }
 
     /**
+     * See KubernetesServiceInterface::setLoginBypassEnv() — fetches the
+     * Deployment fresh (same reason revertDeploymentEnv() does: no create/
+     * delete command already has it in hand) and patches NO_LINELOGIN
+     * straight to the target value in either direction.
+     *
+     * @return array{found: bool, patched: bool, error?: string}
+     */
+    public function setLoginBypassEnv(string $namespace, string $deploymentName, bool $enable): array
+    {
+        $namespace = $this->assertValidLabel($namespace, 'namespace');
+        $deploymentName = $this->assertValidLabel($deploymentName, 'deployment name');
+
+        $deployment = $this->getDeployment($namespace, $deploymentName);
+        if ($deployment === null) {
+            return ['found' => false, 'patched' => false];
+        }
+
+        return $this->patchDeploymentEnvIfPresent(
+            $namespace,
+            $deploymentName,
+            $deployment,
+            self::NO_LINELOGIN_ENV_NAME,
+            $enable ? self::NO_LINELOGIN_VALUE : self::NO_LINELOGIN_ORIGINAL_VALUE
+        );
+    }
+
+    /**
      * Shared by revertNodeAdminPathEnv() and revertLoginBypassEnv() — fetches
      * the Deployment fresh (delete has no reason to already have it in hand)
      * and patches $envName back to $originalValue if present.
