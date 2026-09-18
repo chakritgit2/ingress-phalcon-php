@@ -412,6 +412,21 @@ class MockKubernetesService implements KubernetesServiceInterface
     }
 
     /**
+     * Mirrors KubernetesService::setLoginBypassEnv() against the mock data.
+     *
+     * @return array{found: bool, patched: bool}
+     */
+    public function setLoginBypassEnv(string $namespace, string $deploymentName, bool $enable): array
+    {
+        return $this->patchDeploymentEnvIfPresent(
+            $namespace,
+            $deploymentName,
+            'NO_LINELOGIN',
+            $enable ? self::NO_LINELOGIN_VALUE : self::NO_LINELOGIN_ORIGINAL_VALUE
+        );
+    }
+
+    /**
      * Shared by syncNodeAdminPathEnv()/revertNodeAdminPathEnv() and
      * syncLoginBypassEnv()/revertLoginBypassEnv() — mirrors
      * KubernetesService::patchDeploymentEnvIfPresent() against the flat mock
