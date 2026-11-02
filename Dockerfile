@@ -8,7 +8,7 @@ COPY . .
 RUN npm install --no-audit --no-fund
 RUN npx @tailwindcss/cli -i ./assets/css/app.css -o ./public/css/app.css --minify
 
-FROM phalconphp/cphalcon:v5.9.2-php8.4
+FROM phalconphp/cphalcon:v5.23.0-php8.4
 
 USER root
 
